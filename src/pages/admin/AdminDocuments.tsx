@@ -277,11 +277,12 @@ const AdminDocuments: React.FC = () => {
       <style>{`
         .modal-container { position: relative; }
         .modal-overlay {
-          position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+          position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
           background: rgba(0,0,0,0.3); display: flex; align-items: center; justify-content: center; z-index: 1000;
         }
         .modal {
           background: #fff; padding: 32px; border-radius: 8px; min-width: 320px; max-width: 480px; box-shadow: 0 2px 16px rgba(0,0,0,0.15);
+          margin: 0 auto;
         }
         .modal label { display: block; margin-bottom: 12px; }
         .modal input, .modal select { width: 100%; padding: 8px; margin-top: 4px; margin-bottom: 8px; }

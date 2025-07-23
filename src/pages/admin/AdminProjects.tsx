@@ -408,13 +408,11 @@ const AdminProjects: React.FC<AdminProjectsProps> = ({ initialClientId, initialN
         .modal-container { /* no position needed */ }
         .modal-overlay {
           position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
-          background: rgba(0,0,0,0.3); display: flex; align-items: center; justify-content: center; z-index: 2000;
+          background: rgba(0,0,0,0.3); display: flex; align-items: center; justify-content: center; z-index: 1000;
         }
-        .modal, .responsive-centered-modal {
-          background: #fff; padding: 32px; border-radius: 8px; min-width: 320px; width: 420px; max-width: 95vw; box-shadow: 0 2px 16px rgba(0,0,0,0.15);
-          overflow-y: auto;
-          max-height: 90vh;
-          box-sizing: border-box;
+        .modal {
+          background: #fff; padding: 32px; border-radius: 8px; min-width: 320px; max-width: 480px; box-shadow: 0 2px 16px rgba(0,0,0,0.15);
+          margin: 0 auto;
         }
         .modal label { display: block; margin-bottom: 12px; }
         .modal input, .modal select, .modal textarea { width: 100%; padding: 8px; margin-top: 4px; margin-bottom: 8px; }

@@ -1,235 +1,175 @@
-import React, { useMemo } from 'react';
-import ScoreCard from '../components/ScoreCard';
-import AnalyticsChart from '../components/AnalyticsChart';
-import ActivityFeed from '../components/ActivityFeed';
-import DocumentPreview from '../components/DocumentPreview';
+import React from 'react';
 import { useRealtimeTable } from '../hooks/useRealtimeTable';
+import ScoreCard from '../components/ScoreCard';
+import {
+  BarChart, Bar, XAxis, YAxis, Tooltip, Legend, ResponsiveContainer, LabelList
+} from 'recharts';
 
-const sections = [
-  { key: 'landing', label: 'Landing Page (Navigation/Welcome)' },
-  { key: 'csr-applicability', label: 'CSR Applicability Details' },
-  { key: 'project-details', label: 'Project Details' },
-  { key: 'macro-dashboard', label: 'Macro CSR Dashboard' },
-  { key: 'csr-spent', label: 'CSR Spent per Company' },
-  { key: 'project-money', label: 'Project wise money spent' },
-  { key: 'projects', label: 'Projects' },
-  { key: 'scorecard', label: 'CSR Scorecard' },
-  { key: 'end', label: 'End/Logout' },
-];
+// Simple Pie Chart component for status breakdown
+const PieChart = ({ data }: { data: { label: string; value: number; color: string }[] }) => {
+  const total = data.reduce((sum, d) => sum + d.value, 0);
+  let cumulative = 0;
+  return (
+    <svg width={160} height={160} viewBox="0 0 160 160">
+      {data.map((d, i) => {
+        const startAngle = (cumulative / total) * 2 * Math.PI;
+        const endAngle = ((cumulative + d.value) / total) * 2 * Math.PI;
+        const x1 = 80 + 70 * Math.cos(startAngle - Math.PI / 2);
+        const y1 = 80 + 70 * Math.sin(startAngle - Math.PI / 2);
+        const x2 = 80 + 70 * Math.cos(endAngle - Math.PI / 2);
+        const y2 = 80 + 70 * Math.sin(endAngle - Math.PI / 2);
+        const largeArc = d.value / total > 0.5 ? 1 : 0;
+        const pathData = `M80,80 L${x1},${y1} A70,70 0 ${largeArc} 1 ${x2},${y2} Z`;
+        cumulative += d.value;
+        return <path key={i} d={pathData} fill={d.color} stroke="#fff" strokeWidth={2} />;
+      })}
+    </svg>
+  );
+};
 
 const AdminDashboard: React.FC = () => {
   // Real-time data hooks
   const { data: projects = [] } = useRealtimeTable('projects');
+  const { data: ngos = [] } = useRealtimeTable('ngos');
+  const { data: clients = [] } = useRealtimeTable('clients');
   const { data: budgets = [] } = useRealtimeTable('budget_allocations');
-  const { data: progress = [] } = useRealtimeTable('quarterly_progress');
-  const { data: expenditures = [] } = useRealtimeTable('expenditures');
-  const { data: documents = [] } = useRealtimeTable('documents');
-  const { data: activityLogs = [] } = useRealtimeTable('activity_logs');
 
-  // Create refs for each section at the top level using useMemo and createRef
-  const sectionRefs = useMemo(
-    () => sections.map(() => React.createRef<HTMLDivElement>()),
-    []
-  );
+  // KPI cards
+  const totalProjects = projects.length;
+  const totalNGOs = ngos.length;
+  const totalClients = clients.length;
+  const totalBudget = budgets.reduce((sum, b) => sum + (b.total_budget || 0), 0);
+  const completedProjects = projects.filter((p: any) => p.status === 'completed').length;
+  const locationsCovered = 11; // Placeholder/mock
+  const livesImpacted = 48920; // Placeholder/mock
 
-  // Example: Scorecard metrics from progress table
-  const scorecardMetrics = progress.slice(0, 8).map((p) => ({
-    label: p.kpi_name,
-    value: p.current_value,
-    target: p.target_value,
-  }));
-
-  // Example: Companies from projects table (group by admin_id or similar)
-  const companies = projects.map((p) => ({
-    name: p.title,
-    spent: expenditures.filter(e => e.project_id === p.id).reduce((sum, e) => sum + (e.amount || 0), 0),
-  }));
-
-  // Example: Project money spent
-  const projectMoney = projects.map((p) => ({
-    name: p.title,
-    spent: expenditures.filter(e => e.project_id === p.id).reduce((sum, e) => sum + (e.amount || 0), 0),
-    budget: budgets.filter(b => b.project_id === p.id).reduce((sum, b) => sum + (b.q1 || 0) + (b.q2 || 0) + (b.q3 || 0) + (b.q4 || 0), 0),
-  }));
-
-  // Scroll to section
-  const scrollToSection = (index: number) => {
-    const ref = sectionRefs[index];
-    if (ref && ref.current) {
-      ref.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    }
+  // Project status breakdown
+  const statusCounts = {
+    completed: projects.filter((p: any) => p.status === 'completed').length,
+    ongoing: projects.filter((p: any) => p.status === 'ongoing').length,
+    delayed: projects.filter((p: any) => p.status === 'delayed').length,
   };
+  const statusData = [
+    { label: 'Completed', value: statusCounts.completed, color: '#22c55e' },
+    { label: 'Ongoing', value: statusCounts.ongoing, color: '#2d9cdb' },
+    { label: 'Delayed', value: statusCounts.delayed, color: '#f59e42' },
+  ];
+
+  // Aggregate NGO budget and spent
+  const ngoBudgetData = ngos.map((ngo: any) => {
+    const ngoProjects = projects.filter((p: any) => p.ngo_id === ngo.id);
+    const budget = ngoProjects.reduce((sum, p) => {
+      const b = budgets.find((bud: any) => bud.project_id === p.id);
+      return sum + (b?.total_budget || 0);
+    }, 0);
+    const spent = ngoProjects.reduce((sum, p) => {
+      // If you have expenditures table, sum actual spent here; else use 0 as placeholder
+      return sum + (p.actual_spent || 0);
+    }, 0);
+    return { name: ngo.name, budget, spent };
+  });
 
   return (
-    <div className="dashboard-unified" style={{ display: 'flex' }}>
-      {/* Sidebar Navigation */}
-      <nav style={{ minWidth: 220, marginRight: 32 }}>
-        <ul style={{ listStyle: 'none', padding: 0 }}>
-          {sections.map((s, idx) => (
-            <li key={s.key} style={{ marginBottom: 8 }}>
-              <button
-                style={{ width: '100%', padding: 12, borderRadius: 8, border: '1px solid #ddd', background: '#fff', cursor: 'pointer', textAlign: 'left' }}
-                onClick={() => scrollToSection(idx)}
-              >
-                {s.label}
-              </button>
-            </li>
-          ))}
-        </ul>
-      </nav>
-      {/* Main Content */}
-      <div style={{ flex: 1 }}>
-        {/* Render each section with its ref */}
-        {sections.map((s, idx) => {
-          switch (s.key) {
-            case 'landing':
-              return (
-                <div ref={sectionRefs[idx]} key={s.key} className="card mb-5" style={{ padding: 32, marginBottom: 32 }}>
-                  <h2>Welcome to the CSR Admin Dashboard</h2>
-                  <p>Use the navigation to jump to any section. All your CSR management tools are here in one place.</p>
+    <div className="card" style={{ padding: 32, marginBottom: 32 }}>
+      <h2>Admin Dashboard</h2>
+      <div style={{ display: 'flex', gap: 32, flexWrap: 'wrap', marginBottom: 32 }}>
+        <ScoreCard label="Total Clients" value={totalClients} target={1} />
+        <ScoreCard label="Total NGOs" value={totalNGOs} target={1} />
+        <ScoreCard label="Total Projects" value={totalProjects} target={1} />
+        <ScoreCard label="Total Budget" value={totalBudget} target={1} unit="₹" />
+        <ScoreCard label="Completed Projects" value={completedProjects} target={totalProjects || 1} />
+        <ScoreCard label="Locations Covered" value={locationsCovered} target={1} />
+        <ScoreCard label="Lives Impacted" value={livesImpacted} target={1} />
+      </div>
+      {/* Charts Row: Aligned and Equal Height */}
+      <div style={{ display: 'flex', gap: 32, marginBottom: 32, flexWrap: 'wrap' }}>
+        <div style={{ flex: 1, minWidth: 320, background: '#fff', borderRadius: 12, boxShadow: '0 2px 16px rgba(33,150,83,0.08)', padding: 24, display: 'flex', flexDirection: 'column', justifyContent: 'center', minHeight: 320 }}>
+          <h3 style={{ marginBottom: 16 }}>Project Status Breakdown</h3>
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', flex: 1, justifyContent: 'center' }}>
+            <PieChart data={statusData} />
+            <div style={{ display: 'flex', gap: 16, marginTop: 12 }}>
+              {statusData.map((d, i) => (
+                <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <span style={{ width: 16, height: 16, background: d.color, display: 'inline-block', borderRadius: 4 }}></span>
+                  <span>{d.label}: {d.value}</span>
                 </div>
-              );
-            case 'csr-applicability':
-              return (
-                <div ref={sectionRefs[idx]} key={s.key} className="card mb-5" style={{ padding: 32, marginBottom: 32 }}>
-                  <h2>CSR Applicability Calculator</h2>
-                  <p>Enter your company details to check CSR applicability (demo):</p>
-                  <form style={{ display: 'flex', gap: 16, alignItems: 'center' }}>
-                    <input type="number" placeholder="Net Profit (INR)" style={{ padding: 8 }} />
-                    <input type="number" placeholder="Turnover (INR)" style={{ padding: 8 }} />
-                    <input type="number" placeholder="Net Worth (INR)" style={{ padding: 8 }} />
-                    <button type="button" className="btn btn-primary">Check</button>
-                  </form>
-                  <div style={{ marginTop: 16, color: '#22c55e' }}>CSR is applicable if any value exceeds the threshold.</div>
-                </div>
-              );
-            case 'project-details':
-              return (
-                <div ref={sectionRefs[idx]} key={s.key} className="card mb-5" style={{ padding: 32, marginBottom: 32 }}>
-                  <h2>Project Details</h2>
-                  <table className="table">
-                    <thead>
-                      <tr><th>Project</th><th>Status</th><th>Budget</th></tr>
-                    </thead>
-                    <tbody>
-                      {projectMoney.map(p => (
-                        <tr key={p.name}>
-                          <td>{p.name}</td>
-                          <td>{p.spent >= p.budget ? 'Completed' : 'Active'}</td>
-                          <td>₹{p.budget.toLocaleString()}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              );
-            case 'macro-dashboard':
-              return (
-                <div ref={sectionRefs[idx]} key={s.key} className="card mb-5" style={{ padding: 32, marginBottom: 32 }}>
-                  <h2>Macro CSR Dashboard</h2>
-                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 32 }}>
-                    {scorecardMetrics.map((m, i) => (
-                      <ScoreCard key={i} label={m.label} value={m.value} target={m.target} />
-                    ))}
-                  </div>
-                </div>
-              );
-            case 'csr-spent':
-              return (
-                <div ref={sectionRefs[idx]} key={s.key} className="card mb-5" style={{ padding: 32, marginBottom: 32 }}>
-                  <h2>CSR Spent per Company</h2>
-                  <table className="table">
-                    <thead>
-                      <tr><th>Company</th><th>CSR Spent (INR)</th></tr>
-                    </thead>
-                    <tbody>
-                      {companies.map(c => (
-                        <tr key={c.name}>
-                          <td>{c.name}</td>
-                          <td>₹{c.spent.toLocaleString()}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              );
-            case 'project-money':
-              return (
-                <div ref={sectionRefs[idx]} key={s.key} className="card mb-5" style={{ padding: 32, marginBottom: 32 }}>
-                  <h2>Project Wise Money Spent</h2>
-                  <table className="table">
-                    <thead>
-                      <tr><th>Project</th><th>Spent</th><th>Budget</th></tr>
-                    </thead>
-                    <tbody>
-                      {projectMoney.map(p => (
-                        <tr key={p.name}>
-                          <td>{p.name}</td>
-                          <td>₹{p.spent.toLocaleString()}</td>
-                          <td>₹{p.budget.toLocaleString()}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              );
-            case 'projects':
-              return (
-                <div ref={sectionRefs[idx]} key={s.key} className="card mb-5" style={{ padding: 32, marginBottom: 32 }}>
-                  <h2>Projects</h2>
-                  <ul>
-                    {projects.map(p => (
-                      <li key={p.id}>{p.title} - Budget: ₹{projectMoney.find(pm => pm.name === p.title)?.budget?.toLocaleString() || 0}</li>
-                    ))}
-                  </ul>
-                </div>
-              );
-            case 'scorecard':
-              return (
-                <div ref={sectionRefs[idx]} key={s.key} className="card mb-5" style={{ padding: 32, marginBottom: 32 }}>
-                  <h2>CSR Scorecard</h2>
-                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 32 }}>
-                    {scorecardMetrics.map((m, i) => (
-                      <ScoreCard key={i} label={m.label} value={m.value} target={m.target} editable={true} />
-                    ))}
-                  </div>
-                </div>
-              );
-            case 'end':
-              return (
-                <div ref={sectionRefs[idx]} key={s.key} className="card mb-5" style={{ padding: 32, marginBottom: 32, textAlign: 'center' }}>
-                  <h2>Thank you for using the CSR Platform!</h2>
-                  <button className="btn btn-danger" onClick={() => window.location.href = '/login'}>Logout</button>
-                </div>
-              );
-            default:
-              return null;
-          }
-        })}
-        {/* Add onboarding tip at the top if no projects or companies */}
-        {projects.length === 0 && (
-          <div className="empty-state mb-4">
-            <div className="empty-state-illustration">🚀</div>
-            <div className="mb-2 font-bold">Welcome to your Admin Dashboard!</div>
-            <div>Start by adding a new project or company to see analytics and activity here.</div>
+              ))}
+            </div>
           </div>
-        )}
-        {/* Add Activity Feed and Document Preview as new cards at the end */}
-        <div className="card mb-5" style={{ padding: 32, marginBottom: 32 }}>
-          <h2>Activity Feed</h2>
-          <ActivityFeed />
         </div>
-        <div className="card mb-5" style={{ padding: 32, marginBottom: 32 }}>
-          <h2>Document Uploads & Preview</h2>
-          {documents.length > 0 ? (
-            documents.map((doc) => (
-              <DocumentPreview key={doc.id} fileUrl={doc.file_url} fileType={doc.file_type} fileName={doc.file_name} />
-            ))
-          ) : (
-            <div>No documents uploaded yet.</div>
-          )}
+        <div style={{ flex: 1, minWidth: 320, background: '#fff', borderRadius: 12, boxShadow: '0 2px 16px rgba(33,150,83,0.08)', padding: 24, display: 'flex', flexDirection: 'column', justifyContent: 'center', minHeight: 320 }}>
+          <h3 style={{ marginBottom: 16 }}>NGO-wise Budget vs. Spent</h3>
+          <ResponsiveContainer width="100%" height={Math.max(ngoBudgetData.length * 50, 220)}>
+            <BarChart
+              layout="vertical"
+              data={ngoBudgetData}
+              margin={{ top: 16, right: 32, left: 0, bottom: 16 }}
+              barCategoryGap={20}
+            >
+              <XAxis type="number" tickFormatter={v => `₹${v}`} />
+              <YAxis dataKey="name" type="category" width={120} />
+              <Tooltip formatter={v => `₹${v}`} />
+              <Legend />
+              <Bar dataKey="budget" fill="#b2f2bb" name="Budget">
+                <LabelList dataKey="budget" position="right" formatter={v => `₹${v}`} />
+              </Bar>
+              <Bar dataKey="spent" fill="#219653" name="Spent">
+                <LabelList dataKey="spent" position="right" formatter={v => `₹${v}`} />
+              </Bar>
+            </BarChart>
+          </ResponsiveContainer>
         </div>
       </div>
+      <h3 style={{ marginTop: 32 }}>All Projects</h3>
+      <table className="table">
+        <thead>
+          <tr>
+            <th>Title</th>
+            <th>Status</th>
+            <th>Priority</th>
+            <th>NGO</th>
+            <th>Client</th>
+            <th>Start</th>
+            <th>End</th>
+          </tr>
+        </thead>
+        <tbody>
+          {projects.map((project: any) => (
+            <tr key={project.id}>
+              <td>{project.title}</td>
+              <td>{project.status}</td>
+              <td>{project.priority}</td>
+              <td>{ngos.find((n: any) => n.id === project.ngo_id)?.name || project.ngo_id}</td>
+              <td>{project.client_id}</td>
+              <td>{project.start_date ? new Date(project.start_date).toLocaleDateString() : ''}</td>
+              <td>{project.end_date ? new Date(project.end_date).toLocaleDateString() : ''}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      <h3 style={{ marginTop: 32 }}>All NGOs</h3>
+      <table className="table">
+        <thead>
+          <tr>
+            <th>Name</th>
+            <th>Registration #</th>
+            <th>Focus Areas</th>
+            <th>Contact Person</th>
+            <th>Client</th>
+          </tr>
+        </thead>
+        <tbody>
+          {ngos.map((ngo: any) => (
+            <tr key={ngo.id}>
+              <td>{ngo.name}</td>
+              <td>{ngo.registration_number}</td>
+              <td>{Array.isArray(ngo.focus_areas) ? ngo.focus_areas.join(', ') : ngo.focus_areas}</td>
+              <td>{ngo.contact_person}</td>
+              <td>{ngo.client_id}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
     </div>
   );
 };
