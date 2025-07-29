@@ -38,7 +38,7 @@ const Home: React.FC = () => {
       {/* Header */}
       <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '1.5em 2em', background: 'var(--surface)', borderBottom: '1px solid var(--border)' }}>
         <div style={{ fontWeight: 900, fontSize: 24, color: 'var(--primary-dark)', letterSpacing: '-1px' }}>Sarathi CSR</div>
-        <div>
+    <div>
           <button className="btn btn-success" style={{ marginRight: 16 }} onClick={() => navigate('/login')}>Login</button>
           <button className="btn btn-secondary" onClick={() => navigate('/contact-us')}>Contact Us</button>
         </div>
@@ -118,12 +118,12 @@ const Home: React.FC = () => {
               <div style={{ fontSize: 32, marginBottom: 8 }}>🔒</div>
               <div style={{ fontWeight: 700, marginBottom: 6 }}>Secure & Role-Based</div>
               <div style={{ color: 'var(--muted)' }}>Admins, clients, and NGOs each have their own secure, real-time dashboard.</div>
-            </div>
+          </div>
             <div style={{ background: '#fff', borderRadius: 14, padding: 28 }}>
               <div style={{ fontSize: 32, marginBottom: 8 }}>⚡</div>
               <div style={{ fontWeight: 700, marginBottom: 6 }}>Instant Insights</div>
               <div style={{ color: 'var(--muted)' }}>Get analytics, compliance, and progress updates instantly—no waiting, no confusion.</div>
-            </div>
+              </div>
           </div>
         </div>
       </section>
@@ -144,11 +144,11 @@ const Home: React.FC = () => {
             <div style={{ textAlign: 'center', minWidth: 180 }}>
               <div style={{ fontSize: 36, fontWeight: 900, color: 'var(--primary)' }}>200+</div>
               <div style={{ color: 'var(--muted)', fontWeight: 600 }}>NGOs & Partners</div>
-            </div>
+          </div>
             <div style={{ textAlign: 'center', minWidth: 180 }}>
               <div style={{ fontSize: 36, fontWeight: 900, color: 'var(--primary)' }}>50+</div>
               <div style={{ color: 'var(--muted)', fontWeight: 600 }}>Cities Reached</div>
-            </div>
+              </div>
           </div>
         </div>
       </section>
@@ -201,7 +201,7 @@ const Home: React.FC = () => {
               “I love the real-time analytics and easy document uploads.”
             </blockquote>
             <div style={{ fontWeight: 600, marginTop: 8 }}>Priya K. <span style={{ color: 'var(--muted)', fontWeight: 400 }}>(Corporate Client)</span></div>
-          </div>
+              </div>
           <div style={{ flex: '1 1 250px', background: 'var(--secondary)', borderRadius: 8, padding: 24 }}>
             <div style={{ fontSize: 32, marginBottom: 8 }}>🌟</div>
             <blockquote style={{ fontStyle: 'italic', color: 'var(--primary)' }}>
@@ -216,7 +216,7 @@ const Home: React.FC = () => {
       <footer style={{ background: 'var(--surface)', color: 'var(--muted)', padding: '2em 0', marginTop: 40, borderTop: '1px solid var(--border)', textAlign: 'center' }}>
         <div style={{ fontWeight: 700, fontSize: 18, color: 'var(--primary-dark)' }}>CSR Platform</div>
         <div style={{ margin: '0.5em 0' }}>&copy; {new Date().getFullYear()} All rights reserved.</div>
-        <div style={{ fontSize: 18 }}>
+          <div style={{ fontSize: 18 }}>
           <a href="#" style={{ color: 'var(--primary)', margin: '0 0.5rem' }} aria-label="Twitter">🐦</a>
           <a href="#" style={{ color: 'var(--primary)', margin: '0 0.5rem' }} aria-label="LinkedIn">💼</a>
           <a href="#" style={{ color: 'var(--primary)', margin: '0 0.5rem' }} aria-label="Mail">✉️</a>

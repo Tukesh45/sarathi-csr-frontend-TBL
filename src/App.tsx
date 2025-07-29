@@ -57,8 +57,8 @@ function App() {
           } else {
             let { data: ngo } = await supabase
               .from('ngos')
-              .select('id')
-              .eq('id', session.user.id)
+              .select('id, name, login_email')
+              .eq('login_email', session.user.email)
               .single();
             if (ngo) {
               setRole('ngo');
@@ -98,8 +98,8 @@ function App() {
                   } else {
                     supabase
                       .from('ngos')
-                      .select('id')
-                      .eq('id', session.user.id)
+                      .select('id, name, login_email')
+                      .eq('login_email', session.user.email)
                       .single()
                       .then(({ data: ngo }) => {
                         if (ngo) {
@@ -270,31 +270,31 @@ function App() {
                 element={role === 'client' ? <ClientDashboard user={user} /> : <Navigate to="/login" replace />} />
                 <Route
                   path="/client/projects"
-                element={role === 'client' ? <ClientProjects /> : <Navigate to="/login" replace />} />
+                element={role === 'client' ? <ClientProjects user={user} /> : <Navigate to="/login" replace />} />
                 <Route
                   path="/client/documents"
-                element={role === 'client' ? <ClientDocuments /> : <Navigate to="/login" replace />} />
+                element={role === 'client' ? <ClientDocuments user={user} /> : <Navigate to="/login" replace />} />
                 <Route
                   path="/client/monitoring"
-                element={role === 'client' ? <ClientMonitoring /> : <Navigate to="/login" replace />} />
+                element={role === 'client' ? <ClientMonitoring user={user} /> : <Navigate to="/login" replace />} />
                 <Route
                   path="/client/notes"
-                element={role === 'client' ? <ClientNotes /> : <Navigate to="/login" replace />} />
+                element={role === 'client' ? <ClientNotes user={user} /> : <Navigate to="/login" replace />} />
               <Route
                 path="/ngo-dashboard"
                 element={role === 'ngo' ? <NGODashboard user={user} /> : <Navigate to="/login" replace />} />
                 <Route
                   path="/ngo/questionnaires"
-                element={role === 'ngo' ? <NGOQuestionnaires /> : <Navigate to="/login" replace />} />
+                element={role === 'ngo' ? <NGOQuestionnaires user={user} /> : <Navigate to="/login" replace />} />
                 <Route
                   path="/ngo/files"
-                element={role === 'ngo' ? <NGOFiles /> : <Navigate to="/login" replace />} />
+                element={role === 'ngo' ? <NGOFiles user={user} /> : <Navigate to="/login" replace />} />
                 <Route
                   path="/ngo/budget"
-                element={role === 'ngo' ? <NGOBudget /> : <Navigate to="/login" replace />} />
+                element={role === 'ngo' ? <NGOBudget user={user} /> : <Navigate to="/login" replace />} />
                 <Route
                   path="/ngo/progress"
-                element={role === 'ngo' ? <NGOProgress /> : <Navigate to="/login" replace />} />
+                element={role === 'ngo' ? <NGOProgress user={user} /> : <Navigate to="/login" replace />} />
                 <Route
                   path="*"
                 element={<Navigate to={`/${role}-dashboard`} replace />} />

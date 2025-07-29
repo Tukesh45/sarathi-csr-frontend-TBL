@@ -206,3 +206,217 @@ CREATE TABLE IF NOT EXISTS public.contact_us (
   message text NOT NULL,
   created_at timestamp with time zone DEFAULT now()
 );
+
+-- User Management Tables
+
+-- 7. Profiles Table (for user authentication and roles)
+CREATE TABLE IF NOT EXISTS public.profiles (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  email text UNIQUE NOT NULL,
+  full_name text,
+  organization_name text,
+  role text NOT NULL DEFAULT 'client' CHECK (role IN ('admin', 'client', 'ngo')),
+  created_at timestamp with time zone DEFAULT now(),
+  updated_at timestamp with time zone DEFAULT now()
+);
+
+-- 8. Client Users Join Table (for client access management)
+CREATE TABLE IF NOT EXISTS public.client_users (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id uuid NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
+  client_id uuid NOT NULL REFERENCES public.clients(id) ON DELETE CASCADE,
+  created_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT client_users_unique UNIQUE (user_id, client_id)
+);
+
+-- 9. NGO Users Join Table (for NGO access management)
+CREATE TABLE IF NOT EXISTS public.ngo_users (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id uuid NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
+  ngo_id uuid NOT NULL REFERENCES public.ngos(id) ON DELETE CASCADE,
+  created_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT ngo_users_unique UNIQUE (user_id, ngo_id)
+);
+
+-- Additional Tables for Complete System
+
+-- 10. Budget Allocations Table
+CREATE TABLE IF NOT EXISTS public.budget_allocations (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  project_id uuid REFERENCES public.projects(id) ON DELETE CASCADE,
+  total_budget numeric NOT NULL,
+  q1_budget numeric DEFAULT 0,
+  q2_budget numeric DEFAULT 0,
+  q3_budget numeric DEFAULT 0,
+  q4_budget numeric DEFAULT 0,
+  spent_amount numeric DEFAULT 0,
+  allocated_by uuid REFERENCES public.profiles(id),
+  created_at timestamp with time zone DEFAULT now(),
+  updated_at timestamp with time zone DEFAULT now()
+);
+
+-- 11. Documents Table
+CREATE TABLE IF NOT EXISTS public.documents (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  project_id uuid REFERENCES public.projects(id) ON DELETE CASCADE,
+  client_id uuid REFERENCES public.clients(id) ON DELETE CASCADE,
+  ngo_id uuid REFERENCES public.ngos(id) ON DELETE CASCADE,
+  quarter text,
+  document_type text NOT NULL,
+  file_name text NOT NULL,
+  file_url text NOT NULL,
+  file_size numeric,
+  description text,
+  is_mandatory boolean DEFAULT false,
+  uploaded_by uuid REFERENCES public.profiles(id),
+  created_at timestamp with time zone DEFAULT now()
+);
+
+-- 12. Activity Logs Table
+CREATE TABLE IF NOT EXISTS public.activity_logs (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id uuid REFERENCES public.profiles(id) ON DELETE CASCADE,
+  action text NOT NULL,
+  table_name text,
+  record_id uuid,
+  old_values jsonb,
+  new_values jsonb,
+  ip_address text,
+  user_agent text,
+  created_at timestamp with time zone DEFAULT now()
+);
+
+-- 13. Questionnaire Table
+CREATE TABLE IF NOT EXISTS public.questionnaire (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  ngo_id uuid REFERENCES public.ngos(id) ON DELETE CASCADE,
+  title text NOT NULL,
+  questions jsonb,
+  created_at timestamp with time zone DEFAULT now(),
+  updated_at timestamp with time zone DEFAULT now()
+);
+
+-- 14. Quarterly Progress Table
+CREATE TABLE IF NOT EXISTS public.quarterly_progress (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  project_id uuid REFERENCES public.projects(id) ON DELETE CASCADE,
+  ngo_id uuid REFERENCES public.ngos(id) ON DELETE CASCADE,
+  quarter text NOT NULL,
+  year integer NOT NULL,
+  metric_id text,
+  achieved_value numeric,
+  percentage_complete numeric,
+  notes text,
+  challenges text,
+  reported_by uuid REFERENCES public.profiles(id),
+  verified_by uuid REFERENCES public.profiles(id),
+  verification_date timestamp with time zone,
+  created_at timestamp with time zone DEFAULT now(),
+  updated_at timestamp with time zone DEFAULT now()
+);
+
+-- Indexes for Performance
+CREATE INDEX IF NOT EXISTS idx_profiles_email ON public.profiles(email);
+CREATE INDEX IF NOT EXISTS idx_profiles_role ON public.profiles(role);
+CREATE INDEX IF NOT EXISTS idx_client_users_user_id ON public.client_users(user_id);
+CREATE INDEX IF NOT EXISTS idx_client_users_client_id ON public.client_users(client_id);
+CREATE INDEX IF NOT EXISTS idx_ngo_users_user_id ON public.ngo_users(user_id);
+CREATE INDEX IF NOT EXISTS idx_ngo_users_ngo_id ON public.ngo_users(ngo_id);
+CREATE INDEX IF NOT EXISTS idx_projects_client_id ON public.projects(client_id);
+CREATE INDEX IF NOT EXISTS idx_projects_ngo_id ON public.projects(ngo_id);
+CREATE INDEX IF NOT EXISTS idx_targets_project_id ON public.targets(project_id);
+CREATE INDEX IF NOT EXISTS idx_progress_updates_target_id ON public.progress_updates(target_id);
+CREATE INDEX IF NOT EXISTS idx_progress_updates_ngo_id ON public.progress_updates(ngo_id);
+CREATE INDEX IF NOT EXISTS idx_budget_allocations_project_id ON public.budget_allocations(project_id);
+CREATE INDEX IF NOT EXISTS idx_documents_project_id ON public.documents(project_id);
+CREATE INDEX IF NOT EXISTS idx_documents_client_id ON public.documents(client_id);
+CREATE INDEX IF NOT EXISTS idx_documents_ngo_id ON public.documents(ngo_id);
+CREATE INDEX IF NOT EXISTS idx_activity_logs_user_id ON public.activity_logs(user_id);
+CREATE INDEX IF NOT EXISTS idx_activity_logs_created_at ON public.activity_logs(created_at);
+
+-- RLS Policies for client_users table
+ALTER TABLE public.client_users ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Admins can view all client_users" ON public.client_users
+  FOR SELECT USING (
+    EXISTS (
+      SELECT 1 FROM public.profiles 
+      WHERE id = auth.uid() AND role = 'admin'
+    )
+  );
+
+CREATE POLICY "Admins can insert client_users" ON public.client_users
+  FOR INSERT WITH CHECK (
+    EXISTS (
+      SELECT 1 FROM public.profiles 
+      WHERE id = auth.uid() AND role = 'admin'
+    )
+  );
+
+CREATE POLICY "Admins can update client_users" ON public.client_users
+  FOR UPDATE USING (
+    EXISTS (
+      SELECT 1 FROM public.profiles 
+      WHERE id = auth.uid() AND role = 'admin'
+    )
+  );
+
+CREATE POLICY "Admins can delete client_users" ON public.client_users
+  FOR DELETE USING (
+    EXISTS (
+      SELECT 1 FROM public.profiles 
+      WHERE id = auth.uid() AND role = 'admin'
+    )
+  );
+
+-- RLS Policies for ngo_users table
+ALTER TABLE public.ngo_users ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Admins can view all ngo_users" ON public.ngo_users
+  FOR SELECT USING (
+    EXISTS (
+      SELECT 1 FROM public.profiles 
+      WHERE id = auth.uid() AND role = 'admin'
+    )
+  );
+
+CREATE POLICY "Admins can insert ngo_users" ON public.ngo_users
+  FOR INSERT WITH CHECK (
+    EXISTS (
+      SELECT 1 FROM public.profiles 
+      WHERE id = auth.uid() AND role = 'admin'
+    )
+  );
+
+CREATE POLICY "Admins can update ngo_users" ON public.ngo_users
+  FOR UPDATE USING (
+    EXISTS (
+      SELECT 1 FROM public.profiles 
+      WHERE id = auth.uid() AND role = 'admin'
+    )
+  );
+
+CREATE POLICY "Admins can delete ngo_users" ON public.ngo_users
+  FOR DELETE USING (
+    EXISTS (
+      SELECT 1 FROM public.profiles 
+      WHERE id = auth.uid() AND role = 'admin'
+    )
+  );
+
+-- RLS Policies for other tables
+ALTER TABLE public.budget_allocations ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.documents ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.activity_logs ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.questionnaire ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.quarterly_progress ENABLE ROW LEVEL SECURITY;
+
+-- Grant permissions
+GRANT ALL ON public.profiles TO anon, authenticated;
+GRANT ALL ON public.client_users TO anon, authenticated;
+GRANT ALL ON public.ngo_users TO anon, authenticated;
+GRANT ALL ON public.budget_allocations TO anon, authenticated;
+GRANT ALL ON public.documents TO anon, authenticated;
+GRANT ALL ON public.activity_logs TO anon, authenticated;
+GRANT ALL ON public.questionnaire TO anon, authenticated;
+GRANT ALL ON public.quarterly_progress TO anon, authenticated;

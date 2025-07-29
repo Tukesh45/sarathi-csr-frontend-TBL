@@ -70,8 +70,8 @@ const AdminProjects: React.FC<AdminProjectsProps> = ({ initialClientId, initialN
         geographic_scope: '',
         unit_of_measurement: '',
         target_beneficiaries: '',
-        client_id: '',
-        ngo_id: '',
+        client_id: initialClientId || '',
+        ngo_id: initialNGOId || '',
         status: 'draft',
         priority: 'medium',
         start_date: '',
@@ -87,6 +87,20 @@ const AdminProjects: React.FC<AdminProjectsProps> = ({ initialClientId, initialN
   const closeModal = (cancelled = false) => {
     setShowModal(false);
     setEditingId(null);
+    setForm({
+      title: '',
+      description: '',
+      goal: '',
+      geographic_scope: '',
+      unit_of_measurement: '',
+      target_beneficiaries: '',
+      client_id: initialClientId || '',
+      ngo_id: initialNGOId || '',
+      status: 'draft',
+      priority: 'medium',
+      start_date: '',
+      end_date: '',
+    });
     setFormError('');
     setFeedback('');
     if (cancelled) {
@@ -374,7 +388,7 @@ const AdminProjects: React.FC<AdminProjectsProps> = ({ initialClientId, initialN
                   >
                     <option value="">{filteredNGOs.length === 0 ? 'No NGOs for this client' : 'Select NGO'}</option>
                     {filteredNGOs.map((n: any) => (
-                      <option key={n.id} value={n.user_id}>{n.name}</option> // Use n.user_id here
+                      <option key={n.id} value={n.id}>{n.name}</option>
                     ))}
                   </select>
                 </label>
@@ -403,7 +417,7 @@ const AdminProjects: React.FC<AdminProjectsProps> = ({ initialClientId, initialN
             </div>
           </div>
         )}
-      </div>
+    </div>
       <style>{`
         .modal-container { /* no position needed */ }
         .modal-overlay {

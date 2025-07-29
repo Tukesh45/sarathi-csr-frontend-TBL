@@ -157,7 +157,7 @@ const AdminDocuments: React.FC = () => {
 
   if (loading) {
     return (
-      <div className="card" style={{ padding: 32 }}>
+  <div className="card" style={{ padding: 32 }}>
         <div className="loading-spinner">Loading documents...</div>
       </div>
     );
@@ -166,7 +166,7 @@ const AdminDocuments: React.FC = () => {
   return (
     <>
       <div className="card">
-        <h2>Documents</h2>
+    <h2>Documents</h2>
         {documents.length === 0 ? (
           <div className="empty-state">
             <div className="empty-state-illustration">📄</div>
@@ -175,10 +175,10 @@ const AdminDocuments: React.FC = () => {
           </div>
         ) : (
           <>
-            <table className="table">
-              <thead>
-                <tr>
-                  <th>Project</th>
+    <table className="table">
+      <thead>
+        <tr>
+          <th>Project</th>
                   <th>Quarter</th>
                   <th>Type</th>
                   <th>File Name</th>
@@ -186,11 +186,11 @@ const AdminDocuments: React.FC = () => {
                   <th>File Size</th>
                   <th>Description</th>
                   <th>Mandatory</th>
-                  <th>Uploaded By</th>
-                  <th>Actions</th>
-                </tr>
-              </thead>
-              <tbody>
+          <th>Uploaded By</th>
+          <th>Actions</th>
+        </tr>
+      </thead>
+      <tbody>
                 {documents.map((doc: any) => (
                   <tr key={doc.id}>
                     <td>{projects.find((p: any) => p.id === doc.project_id)?.title || doc.project_id}</td>
@@ -205,14 +205,14 @@ const AdminDocuments: React.FC = () => {
                     <td>
                       <button className="btn btn-xs btn-primary" style={{ marginRight: 8 }} onClick={() => openModal(doc)}>Edit</button>
                       <button className="btn btn-xs btn-danger" onClick={() => handleDelete(doc.id)}>Delete</button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+            </td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
           </>
         )}
-        <div style={{ marginTop: 24 }}>
+    <div style={{ marginTop: 24 }}>
           <button className="btn btn-primary" onClick={() => openModal()}>Upload New Document</button>
         </div>
         <div style={{ marginTop: 8, minHeight: 24 }}>
@@ -272,8 +272,8 @@ const AdminDocuments: React.FC = () => {
               </div>
             </div>
           )}
-        </div>
-      </div>
+    </div>
+  </div>
       <style>{`
         .modal-container { position: relative; }
         .modal-overlay {

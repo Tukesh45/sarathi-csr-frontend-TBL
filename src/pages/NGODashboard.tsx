@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import AnalyticsChart from '../components/AnalyticsChart';
 import ActivityFeed from '../components/ActivityFeed';
 import DocumentPreview from '../components/DocumentPreview';
@@ -12,11 +12,56 @@ interface NGODashboardProps {
 
 const NGODashboard: React.FC<NGODashboardProps> = ({ user }) => {
   const navigate = useNavigate();
-  const { data: projects = [] } = useRealtimeTable('projects', { column: 'ngo_id', value: user.id });
+  
+  // Get NGO record for this user
+  const [ngoRecord, setNgoRecord] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
+  
+  useEffect(() => {
+    const getNgoRecord = async () => {
+      try {
+        const { data: ngo, error } = await supabase
+          .from('ngos')
+          .select('*')
+          .eq('login_email', user.email)
+          .single();
+        
+        if (error) {
+          console.error('Error fetching NGO record:', error);
+        } else {
+          setNgoRecord(ngo);
+        }
+      } catch (err) {
+        console.error('Error fetching NGO record:', err);
+      } finally {
+        setLoading(false);
+      }
+    };
+    
+    getNgoRecord();
+  }, [user.email]);
+  
+  // Filter all data by the NGO's ID (not user.id)
+  const { data: projects = [] } = useRealtimeTable('projects', { 
+    column: 'ngo_id', 
+    value: ngoRecord?.id || 'no-ngo-id' 
+  });
   const { data: clients = [] } = useRealtimeTable('clients');
   const { data: targets = [] } = useRealtimeTable('targets');
-  const { data: progressUpdates = [] } = useRealtimeTable('progress_updates', { column: 'ngo_id', value: user.id });
-  const { data: files = [] } = useRealtimeTable('documents', { column: 'ngo_id', value: user.id });
+  const { data: progressUpdates = [] } = useRealtimeTable('progress_updates', { 
+    column: 'ngo_id', 
+    value: ngoRecord?.id || 'no-ngo-id' 
+  });
+  const { data: files = [] } = useRealtimeTable('documents', { 
+    column: 'ngo_id', 
+    value: ngoRecord?.id || 'no-ngo-id' 
+  });
+  const { data: budgets = [] } = useRealtimeTable('budget_allocations');
+
+  // Filter budgets for this NGO's projects
+  const myBudgets = budgets.filter((budget: any) => 
+    projects.some((project: any) => project.id === budget.project_id)
+  );
 
   const [showModal, setShowModal] = useState(false);
   const [modalTarget, setModalTarget] = useState<any>(null);
@@ -30,18 +75,33 @@ const NGODashboard: React.FC<NGODashboardProps> = ({ user }) => {
   const [submitting, setSubmitting] = useState(false);
   const [globalFeedback, setGlobalFeedback] = useState('');
 
-  // Prepare chart data
-  const chartData = projects.map((p) => ({
-    name: p.title,
-    value: Math.floor(Math.random() * 100), // Simulate progress %
-    target: 100,
-  }));
+  // Prepare chart data based on actual project progress
+  const chartData = projects.map((p) => {
+    const projectTargets = targets.filter((t: any) => t.project_id === p.id);
+    const projectProgress = progressUpdates.filter((pu: any) => 
+      projectTargets.some((t: any) => t.id === pu.target_id)
+    );
+    
+    // Calculate actual progress percentage
+    let progressPercentage = 0;
+    if (projectTargets.length > 0 && projectProgress.length > 0) {
+      const totalTarget = projectTargets.reduce((sum: number, t: any) => sum + (t.target_value || 0), 0);
+      const totalAchieved = projectProgress.reduce((sum: number, pu: any) => sum + (pu.actual_value || 0), 0);
+      progressPercentage = totalTarget > 0 ? Math.round((totalAchieved / totalTarget) * 100) : 0;
+    }
+    
+    return {
+      name: p.title,
+      value: progressPercentage,
+      target: 100,
+    };
+  });
 
   // Helper: Get all targets for this NGO's projects
-  const myTargets = targets.filter(t => projects.some(p => p.id === t.project_id));
+  const myTargets = targets.filter((t: any) => projects.some((p: any) => p.id === t.project_id));
 
   // Helper: Get progress update for a target
-  const getProgressUpdate = (targetId: string) => progressUpdates.find(pu => pu.target_id === targetId);
+  const getProgressUpdate = (targetId: string) => progressUpdates.find((pu: any) => pu.target_id === targetId);
 
   const openModal = (target: any) => {
     const progress = getProgressUpdate(target.id);
@@ -94,7 +154,7 @@ const NGODashboard: React.FC<NGODashboardProps> = ({ user }) => {
       } else {
         const { error } = await supabase.from('progress_updates').insert([{
           target_id: modalTarget.id,
-          ngo_id: user.id,
+          ngo_id: ngoRecord?.id, // Use ngoRecord?.id
           quarter: modalTarget.quarter,
           actual_value: Number(form.actual_value),
           notes: form.notes,
@@ -223,9 +283,55 @@ const NGODashboard: React.FC<NGODashboardProps> = ({ user }) => {
     </table>
   );
 
+  if (loading) {
+    return (
+      <div className="card" style={{ padding: 32 }}>
+        <div className="loading-spinner">Loading NGO data...</div>
+      </div>
+    );
+  }
+
+  if (!ngoRecord) {
+    return (
+      <div className="card" style={{ padding: 32 }}>
+        <div className="empty-state">
+          <div className="empty-state-illustration">⚠️</div>
+          <div className="mb-2 font-bold">NGO Record Not Found</div>
+          <div>Your NGO account is not properly configured. Please contact the administrator.</div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="card">
       <h2>NGO Dashboard</h2>
+      
+      {/* Welcome message with NGO info */}
+      <div style={{ 
+        background: '#f0f9ff', 
+        padding: '16px 20px', 
+        borderRadius: '8px', 
+        marginBottom: '24px',
+        border: '1px solid #0ea5e9',
+        display: 'flex',
+        alignItems: 'center',
+        gap: '12px'
+      }}>
+        <span style={{ fontSize: '24px' }}>🏢</span>
+        <div>
+          <div style={{ fontWeight: 600, fontSize: '16px', color: '#0c4a6e' }}>
+            Welcome, {ngoRecord.name || user.email}!
+          </div>
+          <div style={{ fontSize: '14px', color: '#0369a1' }}>
+            You are logged in as an NGO user. You can view and manage your projects, targets, and progress updates.
+          </div>
+          <div style={{ fontSize: '12px', color: '#0369a1', marginTop: '4px' }}>
+            NGO ID: {ngoRecord.id} | Email: {user.email}
+          </div>
+        </div>
+      </div>
+      
       {/* Onboarding tip */}
       {projects.length === 0 && (
         <div className="empty-state mb-4">
@@ -248,18 +354,28 @@ const NGODashboard: React.FC<NGODashboardProps> = ({ user }) => {
         </div>
         <div style={{ background: '#fff', borderRadius: 16, boxShadow: '0 2px 16px rgba(33,150,83,0.08)', padding: '2em 1em', textAlign: 'center' }}>
           <div style={{ fontSize: 32, marginBottom: 8 }}>✅</div>
-          <div style={{ fontWeight: 700, fontSize: 28 }}>{projects.filter(p => p.status === 'active').length}</div>
+          <div style={{ fontWeight: 700, fontSize: 28 }}>{projects.filter((p: any) => p.status === 'active').length}</div>
           <div style={{ color: 'var(--muted)', fontWeight: 500 }}>Active Projects</div>
         </div>
         <div style={{ background: '#fff', borderRadius: 16, boxShadow: '0 2px 16px rgba(33,150,83,0.08)', padding: '2em 1em', textAlign: 'center' }}>
           <div style={{ fontSize: 32, marginBottom: 8 }}>💰</div>
-          <div style={{ fontWeight: 700, fontSize: 28 }}>₹{projects.reduce((sum, p) => sum + (p.total_budget || 0), 0).toLocaleString()}</div>
+          <div style={{ fontWeight: 700, fontSize: 28 }}>₹{myBudgets.reduce((sum: number, b: any) => sum + (b.total_budget || 0), 0).toLocaleString()}</div>
           <div style={{ color: 'var(--muted)', fontWeight: 500 }}>Total Budget</div>
         </div>
         <div style={{ background: '#fff', borderRadius: 16, boxShadow: '0 2px 16px rgba(33,150,83,0.08)', padding: '2em 1em', textAlign: 'center' }}>
           <div style={{ fontSize: 32, marginBottom: 8 }}>📄</div>
           <div style={{ fontWeight: 700, fontSize: 28 }}>{files.length}</div>
           <div style={{ color: 'var(--muted)', fontWeight: 500 }}>Documents</div>
+        </div>
+        <div style={{ background: '#fff', borderRadius: 16, boxShadow: '0 2px 16px rgba(33,150,83,0.08)', padding: '2em 1em', textAlign: 'center' }}>
+          <div style={{ fontSize: 32, marginBottom: 8 }}>🎯</div>
+          <div style={{ fontWeight: 700, fontSize: 28 }}>{myTargets.length}</div>
+          <div style={{ color: 'var(--muted)', fontWeight: 500 }}>Targets</div>
+        </div>
+        <div style={{ background: '#fff', borderRadius: 16, boxShadow: '0 2px 16px rgba(33,150,83,0.08)', padding: '2em 1em', textAlign: 'center' }}>
+          <div style={{ fontSize: 32, marginBottom: 8 }}>📊</div>
+          <div style={{ fontWeight: 700, fontSize: 28 }}>{progressUpdates.length}</div>
+          <div style={{ color: 'var(--muted)', fontWeight: 500 }}>Progress Updates</div>
         </div>
       </div>
       {/* Analytics Chart */}

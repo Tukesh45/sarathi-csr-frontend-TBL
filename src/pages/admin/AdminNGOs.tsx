@@ -31,6 +31,47 @@ const AdminNGOs: React.FC<AdminNGOsProps> = ({ initialClientId, onNGOAdded, onCa
   const [feedback, setFeedback] = useState('');
   const [feedbackGlobal, setFeedbackGlobal] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const [registrationNumberError, setRegistrationNumberError] = useState('');
+
+  // Function to check registration number availability
+  const checkRegistrationNumber = async (registrationNumber: string) => {
+    if (!registrationNumber.trim() || editingId) {
+      setRegistrationNumberError('');
+      return;
+    }
+
+    try {
+      const { data: existingNGOs, error } = await supabase
+        .from('ngos')
+        .select('registration_number')
+        .eq('registration_number', registrationNumber.trim());
+      
+      if (error) {
+        // Silently handle error - registration number check failed
+        return;
+      }
+      
+      if (existingNGOs && existingNGOs.length > 0) {
+        setRegistrationNumberError('This registration number is already in use');
+      } else {
+        setRegistrationNumberError('');
+      }
+    } catch (err) {
+      // Silently handle error - registration number check failed
+    }
+  };
+
+  // Debounced registration number check
+  const debouncedCheck = React.useCallback(
+    React.useMemo(() => {
+      let timeoutId: NodeJS.Timeout;
+      return (value: string) => {
+        clearTimeout(timeoutId);
+        timeoutId = setTimeout(() => checkRegistrationNumber(value), 500);
+      };
+    }, []),
+    []
+  );
 
   const openModal = (ngo?: any) => {
     if (ngo) {
@@ -56,6 +97,7 @@ const AdminNGOs: React.FC<AdminNGOsProps> = ({ initialClientId, onNGOAdded, onCa
     }
     setShowModal(true);
     setFeedback('');
+    setRegistrationNumberError('');
   };
 
   const closeModal = (cancelled = false) => {
@@ -70,6 +112,7 @@ const AdminNGOs: React.FC<AdminNGOsProps> = ({ initialClientId, onNGOAdded, onCa
     });
     setEditingId(null);
     setFeedback('');
+    setRegistrationNumberError('');
     if (cancelled) {
       setFeedbackGlobal('Cancelled.');
       setTimeout(() => setFeedbackGlobal(''), 2000);
@@ -77,18 +120,55 @@ const AdminNGOs: React.FC<AdminNGOsProps> = ({ initialClientId, onNGOAdded, onCa
   };
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
-    setForm({ ...form, [e.target.name]: e.target.value });
+    const { name, value } = e.target;
+    setForm({ ...form, [name]: value });
+    
+    // Real-time validation for registration number
+    if (name === 'registration_number') {
+      debouncedCheck(value);
+    }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setSubmitting(true);
     setFeedback('');
+    
+    // Check for validation errors
     if (!form.name || !form.registration_number || !form.client_id) {
       setFeedback('Name, Registration Number, and Client are required.');
       setSubmitting(false);
       return;
     }
+
+    // Check for registration number error
+    if (registrationNumberError) {
+      setFeedback('Please fix the registration number error before submitting.');
+      setSubmitting(false);
+      return;
+    }
+
+    // Check if registration number already exists (only for new NGOs, not when editing)
+    if (!editingId) {
+      try {
+        const { data: existingNGOs, error: checkError } = await supabase
+          .from('ngos')
+          .select('registration_number')
+          .eq('registration_number', form.registration_number.trim());
+        
+        if (checkError) throw checkError;
+        
+        if (existingNGOs && existingNGOs.length > 0) {
+          setFeedback('An NGO with this registration number already exists. Please use a different registration number.');
+          setSubmitting(false);
+          return;
+        }
+      } catch (checkErr: any) {
+        // Silently handle error - registration number check failed
+        // Continue with submission if check fails
+      }
+    }
+
     // Convert comma-separated strings to arrays for array fields
     const focus_areas = form.focus_areas
       ? form.focus_areas.split(',').map((s: string) => s.trim()).filter(Boolean)
@@ -96,13 +176,14 @@ const AdminNGOs: React.FC<AdminNGOsProps> = ({ initialClientId, onNGOAdded, onCa
     const geographic_coverage = form.geographic_coverage
       ? form.geographic_coverage.split(',').map((s: string) => s.trim()).filter(Boolean)
       : [];
+    
     try {
       if (editingId) {
         const { error } = await supabase
           .from('ngos')
           .update({
             name: form.name,
-            registration_number: form.registration_number,
+            registration_number: form.registration_number.trim(),
             focus_areas,
             geographic_coverage,
             contact_person: form.contact_person,
@@ -121,14 +202,23 @@ const AdminNGOs: React.FC<AdminNGOsProps> = ({ initialClientId, onNGOAdded, onCa
           .from('ngos')
           .insert([{ 
             name: form.name,
-            registration_number: form.registration_number,
+            registration_number: form.registration_number.trim(),
             focus_areas,
             geographic_coverage,
             contact_person: form.contact_person,
             client_id: form.client_id,
           }])
           .select();
-        if (error) throw error;
+        if (error) {
+          // Handle specific database errors
+          if (error.message.includes('duplicate key value violates unique constraint "ngos_registration_number_key"')) {
+            setFeedback('An NGO with this registration number already exists. Please use a different registration number.');
+          } else {
+            setFeedback(error.message || 'Error occurred while adding NGO.');
+          }
+          setSubmitting(false);
+          return;
+        }
         setFeedback('NGO added successfully!');
         setFeedbackGlobal('NGO added successfully!');
         if (onNGOAdded && data && data[0] && data[0].id) {
@@ -145,7 +235,12 @@ const AdminNGOs: React.FC<AdminNGOsProps> = ({ initialClientId, onNGOAdded, onCa
         }
       }
     } catch (err: any) {
-      setFeedback(err.message || 'Error occurred.');
+      // Handle any other errors
+      if (err.message.includes('duplicate key value violates unique constraint "ngos_registration_number_key"')) {
+        setFeedback('An NGO with this registration number already exists. Please use a different registration number.');
+      } else {
+        setFeedback(err.message || 'Error occurred.');
+      }
     }
     setSubmitting(false);
   };
@@ -172,7 +267,7 @@ const AdminNGOs: React.FC<AdminNGOsProps> = ({ initialClientId, onNGOAdded, onCa
 
   if (loading) {
     return (
-      <div className="card" style={{ padding: 32 }}>
+  <div className="card" style={{ padding: 32 }}>
         <div className="loading-spinner">Loading NGOs...</div>
       </div>
     );
@@ -192,7 +287,18 @@ const AdminNGOs: React.FC<AdminNGOsProps> = ({ initialClientId, onNGOAdded, onCa
             </label>
             <label>
               Registration Number
-              <input name="registration_number" value={form.registration_number} onChange={handleChange} required />
+              <input 
+                name="registration_number" 
+                value={form.registration_number} 
+                onChange={handleChange} 
+                required 
+                style={{ borderColor: registrationNumberError ? '#d32f2f' : undefined }}
+              />
+              {registrationNumberError && (
+                <div style={{ color: '#d32f2f', fontSize: '12px', marginTop: '4px' }}>
+                  {registrationNumberError}
+                </div>
+              )}
             </label>
             <label>
               Focus Areas <span style={{ color: '#888', fontSize: 12 }}>(comma-separated)</span>
@@ -227,7 +333,7 @@ const AdminNGOs: React.FC<AdminNGOsProps> = ({ initialClientId, onNGOAdded, onCa
   return (
     <div className="card">
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-        <h2>NGOs</h2>
+    <h2>NGOs</h2>
       </div>
       {ngos.length === 0 ? (
         <div className="empty-state">
@@ -237,23 +343,23 @@ const AdminNGOs: React.FC<AdminNGOsProps> = ({ initialClientId, onNGOAdded, onCa
         </div>
       ) : (
         <>
-          <table className="table">
-            <thead>
-              <tr>
-                <th>Name</th>
+    <table className="table">
+      <thead>
+        <tr>
+          <th>Name</th>
                 <th>Registration #</th>
                 <th>Focus Areas</th>
                 <th>Contact Person</th>
                 <th>Website</th>
                 <th>Rating</th>
                 <th>Client</th>
-                <th>Actions</th>
-              </tr>
-            </thead>
-            <tbody>
+          <th>Actions</th>
+        </tr>
+      </thead>
+      <tbody>
               {ngos.map((ngo: any) => (
                 <tr key={ngo.id}>
-                  <td>{ngo.name}</td>
+            <td>{ngo.name}</td>
                   <td>{ngo.registration_number}</td>
                   <td>{ngo.focus_areas}</td>
                   <td>{ngo.contact_person}</td>
@@ -263,14 +369,14 @@ const AdminNGOs: React.FC<AdminNGOsProps> = ({ initialClientId, onNGOAdded, onCa
                   <td>
                     <button className="btn btn-xs btn-primary" style={{ marginRight: 8 }} onClick={() => openModal(ngo)}>Edit</button>
                     <button className="btn btn-xs btn-danger" onClick={() => handleDelete(ngo.id)}>Delete</button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+            </td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
         </>
       )}
-      <div style={{ marginTop: 24 }}>
+    <div style={{ marginTop: 24 }}>
         <button className="btn btn-primary" onClick={() => openModal()}>Add New NGO</button>
       </div>
       <div style={{ marginTop: 8, minHeight: 24 }}>
@@ -288,7 +394,18 @@ const AdminNGOs: React.FC<AdminNGOsProps> = ({ initialClientId, onNGOAdded, onCa
                 </label>
                 <label>
                   Registration Number
-                  <input name="registration_number" value={form.registration_number} onChange={handleChange} required />
+                  <input 
+                    name="registration_number" 
+                    value={form.registration_number} 
+                    onChange={handleChange} 
+                    required 
+                    style={{ borderColor: registrationNumberError ? '#d32f2f' : undefined }}
+                  />
+                  {registrationNumberError && (
+                    <div style={{ color: '#d32f2f', fontSize: '12px', marginTop: '4px' }}>
+                      {registrationNumberError}
+                    </div>
+                  )}
                 </label>
                 <label>
                   Focus Areas <span style={{ color: '#888', fontSize: 12 }}>(comma-separated)</span>
@@ -333,8 +450,8 @@ const AdminNGOs: React.FC<AdminNGOsProps> = ({ initialClientId, onNGOAdded, onCa
         .modal input, .modal select { width: 100%; padding: 8px; margin-top: 4px; margin-bottom: 8px; }
         .form-feedback { margin-top: 12px; color: #d32f2f; }
       `}</style>
-    </div>
-  );
+  </div>
+);
 };
 
 export default AdminNGOs; 

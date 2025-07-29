@@ -28,7 +28,6 @@ const Login: React.FC = () => {
       .select('role, id')
       .eq('id', data.user.id)
       .single();
-    console.log('DEBUG: user.id', data.user.id, 'profile:', profile);
     if (profile && profile.role) {
       if (profile.role === 'client') {
         navigate('/client-dashboard');
@@ -56,16 +55,19 @@ const Login: React.FC = () => {
       setLoading(false);
       return;
     }
+    
+    // Check if user is an NGO by matching their email with NGO login_email
     let { data: ngo } = await supabase
       .from('ngos')
-      .select('id')
-      .eq('id', data.user.id)
+      .select('id, name, login_email')
+      .eq('login_email', data.user.email)
       .single();
     if (ngo) {
       navigate('/ngo-dashboard');
       setLoading(false);
       return;
     }
+    
     // Default to admin if not found in clients or ngos
     navigate('/admin-dashboard');
     setLoading(false);

@@ -40,8 +40,33 @@ const AdminDashboard: React.FC = () => {
   const totalClients = clients.length;
   const totalBudget = budgets.reduce((sum, b) => sum + (b.total_budget || 0), 0);
   const completedProjects = projects.filter((p: any) => p.status === 'completed').length;
-  const locationsCovered = 11; // Placeholder/mock
-  const livesImpacted = 48920; // Placeholder/mock
+  
+  // Calculate realistic targets and metrics
+  const targetProjects = Math.max(totalProjects, 1); // At least 1 project target
+  const targetNGOs = Math.max(totalNGOs, 1); // At least 1 NGO target
+  const targetClients = Math.max(totalClients, 1); // At least 1 client target
+  const targetBudget = Math.max(totalBudget, 1000); // At least ₹1000 budget target
+  
+  // Calculate locations covered from project data
+  const locationsCovered = projects.reduce((locations, project) => {
+    if (project.geographic_scope) {
+      const projectLocations = project.geographic_scope.split(',').map((loc: string) => loc.trim());
+      projectLocations.forEach((loc: string) => {
+        if (!locations.includes(loc)) {
+          locations.push(loc);
+        }
+      });
+    }
+    return locations;
+  }, [] as string[]).length;
+  
+  // Calculate lives impacted from project data (target beneficiaries)
+  const livesImpacted = projects.reduce((total, project) => {
+    return total + (project.target_beneficiaries || 0);
+  }, 0);
+  
+  const targetLocations = Math.max(locationsCovered, 1); // At least 1 location target
+  const targetLives = Math.max(livesImpacted, 100); // At least 100 lives target
 
   // Project status breakdown
   const statusCounts = {
@@ -63,8 +88,9 @@ const AdminDashboard: React.FC = () => {
       return sum + (b?.total_budget || 0);
     }, 0);
     const spent = ngoProjects.reduce((sum, p) => {
-      // If you have expenditures table, sum actual spent here; else use 0 as placeholder
-      return sum + (p.actual_spent || 0);
+      // Calculate spent amount from budget allocations
+      const projectBudgets = budgets.filter((bud: any) => bud.project_id === p.id);
+      return sum + projectBudgets.reduce((budgetSum, bud) => budgetSum + (bud.spent_amount || 0), 0);
     }, 0);
     return { name: ngo.name, budget, spent };
   });
@@ -72,15 +98,32 @@ const AdminDashboard: React.FC = () => {
   return (
     <div className="card" style={{ padding: 32, marginBottom: 32 }}>
       <h2>Admin Dashboard</h2>
+      <div style={{ 
+        background: '#f8f9fa', 
+        padding: '16px 20px', 
+        borderRadius: '8px', 
+        marginBottom: '24px',
+        fontSize: '14px',
+        color: '#666',
+        border: '1px solid #e9ecef'
+      }}>
+        <strong>📊 Dashboard Metrics Explained:</strong>
+        <ul style={{ margin: '8px 0 0 0', paddingLeft: '20px' }}>
+          <li><strong>Lives Impacted:</strong> Total number of beneficiaries targeted across all projects</li>
+          <li><strong>Locations Covered:</strong> Unique geographic areas where projects are implemented</li>
+          <li><strong>Completed Projects:</strong> Projects with status "completed"</li>
+          <li><strong>Budget Utilization:</strong> Shows allocated vs. spent budget per NGO</li>
+        </ul>
+                </div>
       <div style={{ display: 'flex', gap: 32, flexWrap: 'wrap', marginBottom: 32 }}>
-        <ScoreCard label="Total Clients" value={totalClients} target={1} />
-        <ScoreCard label="Total NGOs" value={totalNGOs} target={1} />
-        <ScoreCard label="Total Projects" value={totalProjects} target={1} />
-        <ScoreCard label="Total Budget" value={totalBudget} target={1} unit="₹" />
-        <ScoreCard label="Completed Projects" value={completedProjects} target={totalProjects || 1} />
-        <ScoreCard label="Locations Covered" value={locationsCovered} target={1} />
-        <ScoreCard label="Lives Impacted" value={livesImpacted} target={1} />
-      </div>
+        <ScoreCard label="Total Clients" value={totalClients} target={targetClients} />
+        <ScoreCard label="Total NGOs" value={totalNGOs} target={targetNGOs} />
+        <ScoreCard label="Total Projects" value={totalProjects} target={targetProjects} />
+        <ScoreCard label="Total Budget" value={totalBudget} target={targetBudget} unit="₹" />
+        <ScoreCard label="Completed Projects" value={completedProjects} target={targetProjects || 1} />
+        <ScoreCard label="Locations Covered" value={locationsCovered} target={targetLocations} />
+        <ScoreCard label="Lives Impacted" value={livesImpacted} target={targetLives} />
+                </div>
       {/* Charts Row: Aligned and Equal Height */}
       <div style={{ display: 'flex', gap: 32, marginBottom: 32, flexWrap: 'wrap' }}>
         <div style={{ flex: 1, minWidth: 320, background: '#fff', borderRadius: 12, boxShadow: '0 2px 16px rgba(33,150,83,0.08)', padding: 24, display: 'flex', flexDirection: 'column', justifyContent: 'center', minHeight: 320 }}>
@@ -93,9 +136,9 @@ const AdminDashboard: React.FC = () => {
                   <span style={{ width: 16, height: 16, background: d.color, display: 'inline-block', borderRadius: 4 }}></span>
                   <span>{d.label}: {d.value}</span>
                 </div>
-              ))}
-            </div>
-          </div>
+                    ))}
+                  </div>
+                </div>
         </div>
         <div style={{ flex: 1, minWidth: 320, background: '#fff', borderRadius: 12, boxShadow: '0 2px 16px rgba(33,150,83,0.08)', padding: 24, display: 'flex', flexDirection: 'column', justifyContent: 'center', minHeight: 320 }}>
           <h3 style={{ marginBottom: 16 }}>NGO-wise Budget vs. Spent</h3>
@@ -121,8 +164,8 @@ const AdminDashboard: React.FC = () => {
         </div>
       </div>
       <h3 style={{ marginTop: 32 }}>All Projects</h3>
-      <table className="table">
-        <thead>
+                  <table className="table">
+                    <thead>
           <tr>
             <th>Title</th>
             <th>Status</th>
@@ -132,8 +175,8 @@ const AdminDashboard: React.FC = () => {
             <th>Start</th>
             <th>End</th>
           </tr>
-        </thead>
-        <tbody>
+                    </thead>
+                    <tbody>
           {projects.map((project: any) => (
             <tr key={project.id}>
               <td>{project.title}</td>
@@ -143,13 +186,13 @@ const AdminDashboard: React.FC = () => {
               <td>{project.client_id}</td>
               <td>{project.start_date ? new Date(project.start_date).toLocaleDateString() : ''}</td>
               <td>{project.end_date ? new Date(project.end_date).toLocaleDateString() : ''}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
       <h3 style={{ marginTop: 32 }}>All NGOs</h3>
-      <table className="table">
-        <thead>
+                  <table className="table">
+                    <thead>
           <tr>
             <th>Name</th>
             <th>Registration #</th>
@@ -157,8 +200,8 @@ const AdminDashboard: React.FC = () => {
             <th>Contact Person</th>
             <th>Client</th>
           </tr>
-        </thead>
-        <tbody>
+                    </thead>
+                    <tbody>
           {ngos.map((ngo: any) => (
             <tr key={ngo.id}>
               <td>{ngo.name}</td>
@@ -166,10 +209,10 @@ const AdminDashboard: React.FC = () => {
               <td>{Array.isArray(ngo.focus_areas) ? ngo.focus_areas.join(', ') : ngo.focus_areas}</td>
               <td>{ngo.contact_person}</td>
               <td>{ngo.client_id}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
     </div>
   );
 };

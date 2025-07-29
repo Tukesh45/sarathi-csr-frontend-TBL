@@ -1,37 +1,46 @@
 import React from 'react';
 import { useRealtimeTable } from '../../hooks/useRealtimeTable';
 
-// TODO: Replace with actual client user ID from context or props
-const CURRENT_CLIENT_ID = 'CURRENT_CLIENT_ID';
+interface ClientNotesProps {
+  user: any;
+}
 
-const ClientNotes: React.FC = () => {
-  const { data: notes = [], loading } = useRealtimeTable('activity_logs', { column: 'user_id', value: CURRENT_CLIENT_ID });
+const ClientNotes: React.FC<ClientNotesProps> = ({ user }) => {
+  const { data: notes = [], loading } = useRealtimeTable('activity_logs', { column: 'user_id', value: user.id });
 
   if (loading) return <div>Loading...</div>;
 
   return (
     <div className="card">
       <h2>Project Notes</h2>
-      <div className="table-container">
-        <table className="table">
-          <thead>
-            <tr>
-              <th>Date</th>
-              <th>Activity</th>
-              <th>Details</th>
-            </tr>
-          </thead>
-          <tbody>
-            {notes.map((note) => (
-              <tr key={note.id}>
-                <td>{note.timestamp}</td>
-                <td>{note.activity}</td>
-                <td>{note.details}</td>
+      {notes.length === 0 ? (
+        <div className="empty-state">
+          <div className="empty-state-illustration">📝</div>
+          <div className="mb-2 font-bold">No Notes Yet</div>
+          <div>Your project notes and activity logs will appear here.</div>
+        </div>
+      ) : (
+        <div className="table-container">
+          <table className="table">
+            <thead>
+              <tr>
+                <th>Date</th>
+                <th>Activity</th>
+                <th>Details</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+            </thead>
+            <tbody>
+              {notes.map((note) => (
+                <tr key={note.id}>
+                  <td>{note.timestamp}</td>
+                  <td>{note.activity}</td>
+                  <td>{note.details}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
       <div className="form-container">
         <h3>Add New Note</h3>
         <form className="form">

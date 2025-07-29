@@ -163,7 +163,7 @@ const AdminBudgets: React.FC = () => {
 
   if (loading) {
     return (
-      <div className="card" style={{ padding: 32 }}>
+  <div className="card" style={{ padding: 32 }}>
         <div className="loading-spinner">Loading budgets...</div>
       </div>
     );
@@ -172,7 +172,7 @@ const AdminBudgets: React.FC = () => {
   return (
     <>
       <div className="card">
-        <h2>Budgets</h2>
+    <h2>Budgets</h2>
         {budgets.length === 0 ? (
           <div className="empty-state">
             <div className="empty-state-illustration">💰</div>
@@ -181,10 +181,10 @@ const AdminBudgets: React.FC = () => {
           </div>
         ) : (
           <>
-            <table className="table">
-              <thead>
-                <tr>
-                  <th>Project</th>
+    <table className="table">
+      <thead>
+        <tr>
+          <th>Project</th>
                   <th>Total Budget</th>
                   <th>Q1</th>
                   <th>Q2</th>
@@ -193,9 +193,9 @@ const AdminBudgets: React.FC = () => {
                   <th>Contingency</th>
                   <th>Allocated By</th>
                   <th>Actions</th>
-                </tr>
-              </thead>
-              <tbody>
+        </tr>
+      </thead>
+      <tbody>
                 {budgets.map((budget: any) => (
                   <tr key={budget.id}>
                     <td>{projects.find((p: any) => p.id === budget.project_id)?.title || budget.project_id}</td>
@@ -209,14 +209,14 @@ const AdminBudgets: React.FC = () => {
                     <td>
                       <button className="btn btn-xs btn-primary" style={{ marginRight: 8 }} onClick={() => openModal(budget)}>Edit</button>
                       <button className="btn btn-xs btn-danger" onClick={() => handleDelete(budget.id)}>Delete</button>
-                    </td>
-                  </tr>
+              </td>
+            </tr>
                 ))}
-              </tbody>
-            </table>
+      </tbody>
+    </table>
           </>
         )}
-        <div style={{ marginTop: 24 }}>
+    <div style={{ marginTop: 24 }}>
           <button className="btn btn-primary" onClick={() => openModal()}>Allocate New Budget</button>
         </div>
         <div style={{ marginTop: 8, minHeight: 24 }}>
@@ -272,8 +272,8 @@ const AdminBudgets: React.FC = () => {
               </div>
             </div>
           )}
-        </div>
-      </div>
+    </div>
+  </div>
       <style>{`
         .modal-container { position: relative; }
         .modal-overlay {
