@@ -11,7 +11,13 @@ export function useRealtimeTable<T extends { id: string } = any>(table: string, 
       query = query.eq(filter.column, filter.value);
     }
     query.then(({ data, error }) => {
-      if (!error) setData(data || []);
+      if (error) {
+        console.error(`Error fetching ${table}:`, error);
+        setData([]);
+      } else {
+        console.log(`Fetched ${table}:`, data);
+        setData(data || []);
+      }
       setLoading(false);
     });
 

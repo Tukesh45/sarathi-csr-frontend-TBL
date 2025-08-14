@@ -12,13 +12,23 @@ interface ClientDashboardProps {
 const ClientDashboard: React.FC<ClientDashboardProps> = ({ user }) => {
   const navigate = useNavigate();
   
-  // Filter all data by the logged-in client user's ID
-  const { data: projects = [] } = useRealtimeTable('projects', { column: 'client_id', value: user.id });
+  // Get client data for the logged-in user
+  const { data: clientUsers = [] } = useRealtimeTable('client_users');
+  const { data: projects = [] } = useRealtimeTable('projects');
   const { data: ngos = [] } = useRealtimeTable('ngos');
-  const { data: targets = [] } = useRealtimeTable('targets');
-  const { data: progressUpdates = [] } = useRealtimeTable('progress_updates');
-  const { data: files = [] } = useRealtimeTable('documents', { column: 'client_id', value: user.id });
+  const { data: targets = [] } = useRealtimeTable('project_metrics');
+  const { data: progressUpdates = [] } = useRealtimeTable('quarterly_progress');
+  const { data: files = [] } = useRealtimeTable('documents');
   const { data: budgets = [] } = useRealtimeTable('budget_allocations');
+
+  // Get client IDs for this user
+  const userClientIds = clientUsers
+    .filter((cu: any) => cu.user_id === user.id)
+    .map((cu: any) => cu.client_id);
+
+  // Filter data for this client's projects
+  const myProjects = projects.filter((p: any) => userClientIds.includes(p.client_id));
+  const myFiles = files.filter((f: any) => userClientIds.includes(f.client_id));
 
   // Filter state
   const [filters, setFilters] = useState({
@@ -29,21 +39,21 @@ const ClientDashboard: React.FC<ClientDashboardProps> = ({ user }) => {
   });
 
   // Filter data for this client's projects
-  const myTargets = targets.filter((t: any) => projects.some((p: any) => p.id === t.project_id));
+  const myTargets = targets.filter((t: any) => myProjects.some((p: any) => p.id === t.project_id));
   const myProgressUpdates = progressUpdates.filter((pu: any) => 
     myTargets.some((t: any) => t.id === pu.target_id)
   );
   const myBudgets = budgets.filter((budget: any) => 
-    projects.some((project: any) => project.id === budget.project_id)
+    myProjects.some((project: any) => project.id === budget.project_id)
   );
 
   // Get unique NGOs working with this client
   const myNGOs = ngos.filter((ngo: any) => 
-    projects.some((project: any) => project.ngo_id === ngo.id)
+    myProjects.some((project: any) => project.ngo_id === ngo.id)
   );
 
   // Apply filters to projects
-  const filteredProjects = projects.filter((project: any) => {
+  const filteredProjects = myProjects.filter((project: any) => {
     if (filters.selectedNGO && project.ngo_id !== filters.selectedNGO) return false;
     if (filters.selectedProject && project.id !== filters.selectedProject) return false;
     if (filters.selectedStatus && project.status !== filters.selectedStatus) return false;
@@ -148,7 +158,7 @@ const ClientDashboard: React.FC<ClientDashboardProps> = ({ user }) => {
           </div>
         <div style={{ background: '#fff', borderRadius: 16, boxShadow: '0 2px 16px rgba(33,150,83,0.08)', padding: '2em 1em', textAlign: 'center' }}>
           <div style={{ fontSize: 32, marginBottom: 8 }}>✅</div>
-          <div style={{ fontWeight: 700, fontSize: 28 }}>{projects.filter((p: any) => p.status === 'active').length}</div>
+          <div style={{ fontWeight: 700, fontSize: 28 }}>{myProjects.filter((p: any) => p.status === 'active').length}</div>
           <div style={{ color: 'var(--muted)', fontWeight: 500 }}>Active Projects</div>
         </div>
         <div style={{ background: '#fff', borderRadius: 16, boxShadow: '0 2px 16px rgba(33,150,83,0.08)', padding: '2em 1em', textAlign: 'center' }}>
@@ -158,7 +168,7 @@ const ClientDashboard: React.FC<ClientDashboardProps> = ({ user }) => {
           </div>
         <div style={{ background: '#fff', borderRadius: 16, boxShadow: '0 2px 16px rgba(33,150,83,0.08)', padding: '2em 1em', textAlign: 'center' }}>
           <div style={{ fontSize: 32, marginBottom: 8 }}>📄</div>
-          <div style={{ fontWeight: 700, fontSize: 28 }}>{files.length}</div>
+          <div style={{ fontWeight: 700, fontSize: 28 }}>{myFiles.length}</div>
           <div style={{ color: 'var(--muted)', fontWeight: 500 }}>Documents</div>
         </div>
         <div style={{ background: '#fff', borderRadius: 16, boxShadow: '0 2px 16px rgba(33,150,83,0.08)', padding: '2em 1em', textAlign: 'center' }}>
@@ -174,6 +184,65 @@ const ClientDashboard: React.FC<ClientDashboardProps> = ({ user }) => {
       </div>
       {/* Analytics Chart */}
       <AnalyticsChart data={chartData} title="Project Progress Overview" />
+      
+      {/* Assigned NGOs Section */}
+      <div className="card" style={{ marginTop: 32 }}>
+        <div className="card-body">
+          <h3 className="mb-3">My Assigned NGOs</h3>
+          {myNGOs.length === 0 ? (
+            <div className="empty-state">
+              <div className="empty-state-illustration">🏢</div>
+              <div className="mb-2 font-bold">No NGOs Assigned</div>
+              <div>Contact the administrator to get NGOs assigned to your organization.</div>
+            </div>
+          ) : (
+            <div style={{ 
+              display: 'grid', 
+              gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', 
+              gap: 16 
+            }}>
+              {myNGOs.map((ngo: any) => {
+                const ngoProjects = myProjects.filter((p: any) => p.ngo_id === ngo.id);
+                const ngoProgress = myProgressUpdates.filter((pu: any) => 
+                  ngoProjects.some((p: any) => myTargets.some((t: any) => t.project_id === p.id && t.id === pu.target_id))
+                );
+                
+                return (
+                  <div key={ngo.id} style={{ 
+                    background: '#f8fafc', 
+                    padding: '16px', 
+                    borderRadius: '8px', 
+                    border: '1px solid #e2e8f0' 
+                  }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '12px' }}>
+                      <span style={{ fontSize: '24px' }}>🏢</span>
+                      <div>
+                        <div style={{ fontWeight: '600', fontSize: '16px' }}>{ngo.name}</div>
+                        <div style={{ fontSize: '12px', color: '#6b7280' }}>{ngo.focus_areas}</div>
+                      </div>
+                    </div>
+                    <div style={{ fontSize: '14px', color: '#374151', marginBottom: '8px' }}>
+                      <strong>Contact:</strong> {ngo.contact_person}
+                    </div>
+                    <div style={{ fontSize: '14px', color: '#374151', marginBottom: '12px' }}>
+                      <strong>Coverage:</strong> {ngo.geographic_coverage}
+                    </div>
+                    <div style={{ 
+                      display: 'flex', 
+                      justifyContent: 'space-between', 
+                      fontSize: '12px', 
+                      color: '#6b7280' 
+                    }}>
+                      <span>{ngoProjects.length} Projects</span>
+                      <span>{ngoProgress.length} Progress Updates</span>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      </div>
       
       {/* Filter Section */}
       <div className="card" style={{ marginTop: 32 }}>
@@ -284,7 +353,7 @@ const ClientDashboard: React.FC<ClientDashboardProps> = ({ user }) => {
               </thead>
               <tbody>
                 {filteredTargets.map((target: any) => {
-                  const project = projects.find((p: any) => p.id === target.project_id);
+                  const project = myProjects.find((p: any) => p.id === target.project_id);
                   const ngo = ngos.find((n: any) => n.id === project?.ngo_id);
                   const progress = progressUpdates.find((pu: any) => pu.target_id === target.id);
                   const progressPercentage = target.value > 0 && progress?.actual_value 
@@ -325,8 +394,8 @@ const ClientDashboard: React.FC<ClientDashboardProps> = ({ user }) => {
       </div>
       <div className="card mb-5" style={{ padding: 32, marginBottom: 32 }}>
         <h2>Document Uploads & Preview</h2>
-        {files.length > 0 ? (
-          files.map((doc) => (
+        {myFiles.length > 0 ? (
+          myFiles.map((doc) => (
             <DocumentPreview key={doc.id} fileUrl={doc.file_url} fileType={doc.file_type} fileName={doc.file_name} />
           ))
         ) : (

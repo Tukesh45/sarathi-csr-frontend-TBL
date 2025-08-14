@@ -17,19 +17,47 @@ const NGODashboard: React.FC<NGODashboardProps> = ({ user }) => {
   const [ngoRecord, setNgoRecord] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   
+  // Get NGO data for the logged-in user - optimized loading
+  const { data: ngoUsers = [], loading: loadingNgoUsers } = useRealtimeTable('ngo_users');
+  const { data: ngos = [], loading: loadingNgos } = useRealtimeTable('ngos');
+  
   useEffect(() => {
     const getNgoRecord = async () => {
       try {
-        const { data: ngo, error } = await supabase
-          .from('ngos')
-          .select('*')
-          .eq('login_email', user.email)
-          .single();
+        console.log('NGODashboard: Looking for NGO record for user:', user.id);
+        console.log('Available ngoUsers:', ngoUsers);
+        console.log('Available ngos:', ngos);
         
-        if (error) {
-          console.error('Error fetching NGO record:', error);
+        // Find NGO user relationship
+        const ngoUser = ngoUsers.find((nu: any) => nu.user_id === user.id);
+        if (ngoUser) {
+          console.log('Found ngoUser relationship:', ngoUser);
+          // Find the NGO record
+          const ngo = ngos.find((n: any) => n.id === ngoUser.ngo_id);
+          if (ngo) {
+            console.log('NGODashboard: Found NGO record:', ngo);
+            setNgoRecord(ngo);
+          } else {
+            console.error('NGO record not found for ngo_id:', ngoUser.ngo_id);
+            // Try to find NGO by user_id as fallback
+            const ngoByUserId = ngos.find((n: any) => n.user_id === user.id);
+            if (ngoByUserId) {
+              console.log('Found NGO record by user_id:', ngoByUserId);
+              setNgoRecord(ngoByUserId);
+            } else {
+              console.error('No NGO record found by any method');
+            }
+          }
         } else {
-          setNgoRecord(ngo);
+          console.error('NGO user relationship not found for user:', user.id);
+          // Try to find NGO directly by user_id
+          const ngoByUserId = ngos.find((n: any) => n.user_id === user.id);
+          if (ngoByUserId) {
+            console.log('Found NGO record directly by user_id:', ngoByUserId);
+            setNgoRecord(ngoByUserId);
+          } else {
+            console.error('No NGO record found for user');
+          }
         }
       } catch (err) {
         console.error('Error fetching NGO record:', err);
@@ -38,8 +66,21 @@ const NGODashboard: React.FC<NGODashboardProps> = ({ user }) => {
       }
     };
     
-    getNgoRecord();
-  }, [user.email]);
+    // Only wait for the data we actually need
+    if (!loadingNgoUsers && !loadingNgos) {
+      getNgoRecord();
+    }
+    
+    // Add timeout to prevent infinite loading
+    const timeout = setTimeout(() => {
+      if (loading) {
+        console.warn('NGODashboard: Loading timeout - forcing stop');
+        setLoading(false);
+      }
+    }, 10000); // 10 second timeout
+    
+    return () => clearTimeout(timeout);
+  }, [user.id, ngoUsers, ngos, loadingNgoUsers, loadingNgos, loading]);
   
   // Filter all data by the NGO's ID (not user.id)
   const { data: projects = [] } = useRealtimeTable('projects', { 
@@ -47,10 +88,10 @@ const NGODashboard: React.FC<NGODashboardProps> = ({ user }) => {
     value: ngoRecord?.id || 'no-ngo-id' 
   });
   const { data: clients = [] } = useRealtimeTable('clients');
-  const { data: targets = [] } = useRealtimeTable('targets');
-  const { data: progressUpdates = [] } = useRealtimeTable('progress_updates', { 
-    column: 'ngo_id', 
-    value: ngoRecord?.id || 'no-ngo-id' 
+  const { data: targets = [] } = useRealtimeTable('project_metrics');
+  const { data: progressUpdates = [] } = useRealtimeTable('quarterly_progress', { 
+    column: 'project_id', 
+    value: projects.map((p: any) => p.id) 
   });
   const { data: files = [] } = useRealtimeTable('documents', { 
     column: 'ngo_id', 
@@ -286,7 +327,32 @@ const NGODashboard: React.FC<NGODashboardProps> = ({ user }) => {
   if (loading) {
     return (
       <div className="card" style={{ padding: 32 }}>
-        <div className="loading-spinner">Loading NGO data...</div>
+        <div className="loading-spinner">
+          <div>Loading NGO Dashboard...</div>
+          <div style={{ fontSize: '14px', color: '#6b7280', marginTop: '8px' }}>
+            {loadingNgoUsers ? 'Loading user relationships...' : ''}
+            {loadingNgos ? 'Loading NGO data...' : ''}
+            {!loadingNgoUsers && !loadingNgos ? 'Finding your NGO record...' : ''}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (!ngoRecord) {
+    return (
+      <div className="card" style={{ padding: 32 }}>
+        <div style={{ textAlign: 'center', color: '#dc2626' }}>
+          <h3>NGO Record Not Found</h3>
+          <p>Unable to find your NGO record. Please contact the administrator.</p>
+          <button 
+            className="btn btn-primary" 
+            onClick={() => window.location.reload()}
+            style={{ marginTop: '16px' }}
+          >
+            Retry
+          </button>
+        </div>
       </div>
     );
   }

@@ -24,6 +24,8 @@ import NGOFiles from './pages/ngo/NGOFiles';
 import NGOBudget from './pages/ngo/NGOBudget';
 import NGOProgress from './pages/ngo/NGOProgress';
 import ContactUs from './pages/ContactUs';
+import ComplianceTrackerPage from './pages/ComplianceTrackerPage';
+
 import { UIProvider } from './context/UIContext';
 import './index.css';
 
@@ -34,85 +36,86 @@ function App() {
 
   useEffect(() => {
     const getSessionAndRole = async () => {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (session?.user) {
-        setUser(session.user);
-        // 1. Try to get role from profiles table
-        let { data: profile } = await supabase
-          .from('profiles')
-          .select('role')
-          .eq('id', session.user.id)
-          .single();
-        if (profile && profile.role) {
-          setRole(profile.role);
-        } else {
-          // 2. Fallback to clients/ngos tables (may 406 if RLS not set)
-          let { data: client } = await supabase
-            .from('clients')
-            .select('id')
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (session?.user) {
+          setUser(session.user);
+          // Get role from profiles table only
+          let { data: profile } = await supabase
+            .from('profiles')
+            .select('role')
             .eq('id', session.user.id)
             .single();
-          if (client) {
-            setRole('client');
+          
+          if (profile && profile.role) {
+            setRole(profile.role);
           } else {
-            let { data: ngo } = await supabase
-              .from('ngos')
-              .select('id, name, login_email')
-              .eq('login_email', session.user.email)
+            // If no profile found, create one with default role
+            const { data: newProfile } = await supabase
+              .from('profiles')
+              .insert([{
+                id: session.user.id,
+                email: session.user.email,
+                full_name: session.user.user_metadata?.full_name || session.user.email,
+                role: 'client', // Default role
+                organization_name: session.user.user_metadata?.organization_name || ''
+              }])
+              .select()
               .single();
-            if (ngo) {
-              setRole('ngo');
-            } else {
-              setRole('admin');
+            
+            if (newProfile) {
+              setRole(newProfile.role);
             }
           }
+        } else {
+          setUser(null);
+          setRole(null);
         }
-      } else {
+      } catch (error) {
+        console.error('Error getting session and role:', error);
         setUser(null);
         setRole(null);
-    }
-    setLoading(false);
+      }
+      setLoading(false);
     };
     getSessionAndRole();
-    const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
-      if (session?.user) {
-        setUser(session.user);
-        // 1. Try to get role from profiles table
-        supabase
-          .from('profiles')
-          .select('role')
-          .eq('id', session.user.id)
-          .single()
-          .then(({ data: profile }) => {
-            if (profile && profile.role) {
-              setRole(profile.role);
-            } else {
-              supabase
-                .from('clients')
-                .select('id')
-                .eq('id', session.user.id)
-                .single()
-                .then(({ data: client }) => {
-                  if (client) {
-                    setRole('client');
-                  } else {
-                    supabase
-                      .from('ngos')
-                      .select('id, name, login_email')
-                      .eq('login_email', session.user.email)
-                      .single()
-                      .then(({ data: ngo }) => {
-                        if (ngo) {
-                          setRole('ngo');
-                        } else {
-                          setRole('admin');
-                        }
-                      });
-                  }
-                });
+    const { data: listener } = supabase.auth.onAuthStateChange(async (_event: any, session: any) => {
+      try {
+        if (session?.user) {
+          setUser(session.user);
+          // Get role from profiles table only
+          let { data: profile } = await supabase
+            .from('profiles')
+            .select('role')
+            .eq('id', session.user.id)
+            .single();
+          
+          if (profile && profile.role) {
+            setRole(profile.role);
+          } else {
+            // If no profile found, create one with default role
+            const { data: newProfile } = await supabase
+              .from('profiles')
+              .insert([{
+                id: session.user.id,
+                email: session.user.email,
+                full_name: session.user.user_metadata?.full_name || session.user.email,
+                role: 'client', // Default role
+                organization_name: session.user.user_metadata?.organization_name || ''
+              }])
+              .select()
+              .single();
+            
+            if (newProfile) {
+              setRole(newProfile.role);
             }
-          });
-      } else {
+          }
+        } else {
+          setUser(null);
+          setRole(null);
+        }
+      } catch (error) {
+        console.error('Error in auth state change:', error);
         setUser(null);
         setRole(null);
       }
@@ -214,30 +217,41 @@ function App() {
             </div>
           </header>
         )}
+
         <div style={{ display: 'flex', minHeight: '100vh', marginTop: user && role ? '80px' : 0 }}>
           {/* Sidebar */}
           <aside className="sidebar">
             <div className="sidebar-header">Sarathi CSR</div>
             <nav>
-              {getSidebarItems().map(item => (
-                    <NavLink 
-                  key={item.href}
-                      to={item.href}
-                  className={({ isActive }) => isActive ? 'active' : ''}
-                  style={{ display: 'flex', alignItems: 'center', gap: 12 }}
-                    >
-                  <span style={{ fontSize: 20 }}>{item.icon}</span> {item.name}
-                    </NavLink>
-                ))}
+               {getSidebarItems().map(item => (
+              <NavLink 
+                key={item.href}
+                to={item.href}
+                className={({ isActive }) => isActive ? 'active' : ''}
+                style={{ display: 'flex', alignItems: 'center', gap: 12 }}
+              >
+                <span style={{ fontSize: 20 }}>{item.icon}</span> {item.name}
+              </NavLink>
+            ))}
+            {(role === 'ngo' || role === 'client') && (
+              <NavLink 
+                to="/compliance"
+                className={({ isActive }) => isActive ? 'active' : ''}
+                style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 8 }}
+              >
+                <span style={{ fontSize: 20 }}>✅</span> Compliance Tracker
+              </NavLink>
+            )}
             </nav>
             {/* Remove Logout button from sidebar */}
           </aside>
           {/* Main Content */}
           <main className="main-content">
-              <Routes>
-                <Route
-                  path="/admin-dashboard"
-                element={role === 'admin' ? <AdminDashboard /> : <Navigate to="/login" replace />} />
+                             <Routes>
+                 <Route path="/compliance" element={(role === 'ngo' || role === 'client') ? <ComplianceTrackerPage /> : <Navigate to={`/${role}-dashboard`} replace />} />
+                 <Route
+                   path="/admin-dashboard"
+                 element={role === 'admin' ? <AdminDashboard /> : <Navigate to="/login" replace />} />
                 <Route
                 path="/admin/clients"
                 element={role === 'admin' ? <AdminClients /> : <Navigate to="/login" replace />} />

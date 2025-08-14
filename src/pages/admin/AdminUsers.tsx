@@ -9,6 +9,21 @@ const AdminUsers: React.FC = () => {
   
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => setUserEmail(data?.user?.email || 'Admin'));
+    
+    // Test manual data fetch
+    const testDataFetch = async () => {
+      try {
+        const { data: testProfiles, error } = await supabase.from('profiles').select('*');
+        console.log('Manual profiles fetch:', { data: testProfiles, error });
+        
+        const { data: testClients, error: clientError } = await supabase.from('clients').select('*');
+        console.log('Manual clients fetch:', { data: testClients, error: clientError });
+      } catch (err) {
+        console.error('Manual fetch error:', err);
+      }
+    };
+    
+    testDataFetch();
   }, []);
 
   // Real-time data
@@ -17,6 +32,27 @@ const AdminUsers: React.FC = () => {
   const { data: ngos = [] } = useRealtimeTable('ngos');
   const { data: clientUsers = [] } = useRealtimeTable('client_users');
   const { data: ngoUsers = [] } = useRealtimeTable('ngo_users');
+
+  // Debug logging
+  useEffect(() => {
+    console.log('AdminUsers Debug Info:');
+    console.log('Profiles count:', profiles.length, 'Data:', profiles);
+    console.log('Clients count:', clients.length, 'Data:', clients);
+    console.log('NGOs count:', ngos.length, 'Data:', ngos);
+    console.log('Client Users count:', clientUsers.length, 'Data:', clientUsers);
+    console.log('NGO Users count:', ngoUsers.length, 'Data:', ngoUsers);
+    
+    // Check for any empty or error states
+    if (profiles.length === 0) {
+      console.warn('No profiles found - this might indicate a connection issue');
+    }
+    if (clients.length === 0) {
+      console.warn('No clients found');
+    }
+    if (ngos.length === 0) {
+      console.warn('No NGOs found');
+    }
+  }, [profiles, clients, ngos, clientUsers, ngoUsers]);
 
   // State management
   const [showModal, setShowModal] = useState(false);
@@ -106,6 +142,33 @@ const AdminUsers: React.FC = () => {
 
         if (profileError) throw profileError;
 
+        // If user role is changed to NGO, ensure they have an NGO record
+        if (form.role === 'ngo') {
+          const existingNgo = ngos.find((n: any) => n.user_id === editingId);
+          if (!existingNgo) {
+            // Create NGO record for this user
+            const { data: newNgo, error: ngoError } = await supabase
+              .from('ngos')
+              .insert([{
+                name: form.organization_name || 'NGO Organization',
+                registration_number: 'NGO_REG_' + Math.random().toString(36).substr(2, 9),
+                focus_areas: 'Focus areas to be defined',
+                geographic_coverage: 'Geographic coverage to be defined',
+                contact_person: form.full_name,
+                login_email: form.email,
+                user_id: editingId
+              }])
+              .select()
+              .single();
+            
+            if (ngoError) {
+              console.error('Error creating NGO record:', ngoError);
+            } else if (newNgo) {
+              console.log('Created NGO record for user:', newNgo);
+            }
+          }
+        }
+
         // Update client access
         const currentClientIds = clientUsers.filter((cu: any) => cu.user_id === editingId).map((cu: any) => cu.client_id);
         
@@ -129,6 +192,19 @@ const AdminUsers: React.FC = () => {
         // Add new NGO access
         for (const ngoId of form.selectedNGOs) {
           if (!currentNGOIds.includes(ngoId)) {
+            // First, ensure the NGO record exists and is properly linked
+            const ngoRecord = ngos.find((n: any) => n.id === ngoId);
+            if (ngoRecord) {
+              // Update NGO record to link with this user if not already linked
+              if (!ngoRecord.user_id) {
+                await supabase
+                  .from('ngos')
+                  .update({ user_id: editingId })
+                  .eq('id', ngoId);
+              }
+            }
+            
+            // Create the ngo_users relationship
             await supabase.from('ngo_users').insert([{ user_id: editingId, ngo_id: ngoId }]);
           }
         }
