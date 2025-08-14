@@ -8,6 +8,8 @@ import { useNavigate } from 'react-router-dom';
 const AdminClients: React.FC = () => {
   const navigate = useNavigate();
   const { data: clients = [], loading } = useRealtimeTable('clients');
+  const { data: ngos = [] } = useRealtimeTable('ngos');
+  const { data: projects = [] } = useRealtimeTable('projects');
   const [showModal, setShowModal] = useState(false);
   const [form, setForm] = useState({
     company_name: '',
@@ -162,6 +164,16 @@ const AdminClients: React.FC = () => {
     navigate('/');
   };
 
+  // Helper function to get NGOs assigned to a client
+  const getClientNGOs = (clientId: string) => {
+    return ngos.filter((ngo: any) => ngo.client_id === clientId);
+  };
+
+  // Helper function to get projects for a client
+  const getClientProjects = (clientId: string) => {
+    return projects.filter((project: any) => project.client_id === clientId);
+  };
+
   if (loading) {
     return (
       <div className="card" style={{ padding: 32 }}>
@@ -190,26 +202,71 @@ const AdminClients: React.FC = () => {
                 <th>Industry</th>
                 <th>Contact Person</th>
                 <th>Annual CSR Budget</th>
-                <th>CIN Number</th>
-                <th>Website</th>
+                <th>Assigned NGOs</th>
+                <th>Projects</th>
                 <th>Actions</th>
               </tr>
             </thead>
             <tbody>
-              {clients.map((client: any) => (
+              {clients.map((client: any) => {
+                const clientNGOs = getClientNGOs(client.id);
+                const clientProjects = getClientProjects(client.id);
+                return (
                 <tr key={client.id}>
-                  <td>{client.company_name}</td>
+                    <td>
+                      <div style={{ fontWeight: '600' }}>{client.company_name}</div>
+                      <div style={{ fontSize: '12px', color: '#6b7280' }}>{client.website}</div>
+                    </td>
                   <td>{client.industry}</td>
                   <td>{client.contact_person}</td>
-                  <td>{client.annual_csr_budget}</td>
-                  <td>{client.cin_number}</td>
-                  <td>{client.website}</td>
+                    <td>₹{client.annual_csr_budget?.toLocaleString() || '0'}</td>
+                    <td>
+                      {clientNGOs.length > 0 ? (
+                        <div>
+                          {clientNGOs.map((ngo: any) => (
+                            <div key={ngo.id} style={{ 
+                              background: '#f0f9ff', 
+                              padding: '4px 8px', 
+                              borderRadius: '4px', 
+                              marginBottom: '4px',
+                              fontSize: '12px',
+                              border: '1px solid #0ea5e9'
+                            }}>
+                              {ngo.name}
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <span style={{ color: '#6b7280', fontSize: '12px' }}>No NGOs assigned</span>
+                      )}
+                    </td>
+                    <td>
+                      {clientProjects.length > 0 ? (
+                        <div>
+                          {clientProjects.map((project: any) => (
+                            <div key={project.id} style={{ 
+                              background: '#f0fdf4', 
+                              padding: '4px 8px', 
+                              borderRadius: '4px', 
+                              marginBottom: '4px',
+                              fontSize: '12px',
+                              border: '1px solid #22c55e'
+                            }}>
+                              {project.title}
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <span style={{ color: '#6b7280', fontSize: '12px' }}>No projects</span>
+                      )}
+                    </td>
                   <td>
                     <button className="btn btn-xs btn-primary" style={{ marginRight: 8 }} onClick={() => openModal(client)}>Edit</button>
                     <button className="btn btn-xs btn-danger" onClick={() => handleDelete(client.id)}>Delete</button>
                   </td>
                 </tr>
-              ))}
+                );
+              })}
             </tbody>
           </table>
         </>
