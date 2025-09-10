@@ -1,17 +1,23 @@
-import React, { useState, useEffect } from 'react';
+import React from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate, NavLink } from 'react-router-dom';
 import { supabase } from './lib/supabase';
+
+// --- Page Imports ---
 import Login from './pages/Login';
 import AdminDashboard from './pages/AdminDashboard';
 import ClientDashboard from './pages/ClientDashboard';
 import NGODashboard from './pages/NGODashboard';
 import Home from './pages/Home';
+
+// Client Pages
 import ClientProjects from './pages/client/ClientProjects';
-import ClientDocuments from './pages/client/ClientDocuments';
-import ClientMonitoring from './pages/client/ClientMonitoring';
-import ClientNotes from './pages/client/ClientNotes';
+import ClientBudget from './pages/client/ClientBudget';
+import ClientScorecard from './pages/client/ClientScorecard';
+
+// Admin Pages
 import AdminProjects from './pages/admin/AdminProjects';
-import AdminBudgets from './pages/admin/AdminBudgets';
+import AdminBudgets from './pages/admin/AdminBudgets'; // Corrected Path
 import AdminDocuments from './pages/admin/AdminDocuments';
 import AdminActivity from './pages/admin/AdminActivity';
 import AdminNGOs from './pages/admin/AdminNGOs';
@@ -19,10 +25,14 @@ import AdminReports from './pages/admin/AdminReports';
 import AdminClients from './pages/admin/AdminClients';
 import AdminUsers from './pages/admin/AdminUsers';
 import AdminContactUs from './pages/admin/AdminContactUs';
+
+// NGO Pages
 import NGOQuestionnaires from './pages/ngo/NGOQuestionnaires';
 import NGOFiles from './pages/ngo/NGOFiles';
 import NGOBudget from './pages/ngo/NGOBudget';
 import NGOProgress from './pages/ngo/NGOProgress';
+
+// Common Pages
 import ContactUs from './pages/ContactUs';
 import ComplianceTrackerPage from './pages/ComplianceTrackerPage';
 
@@ -32,292 +42,178 @@ import './index.css';
 function App() {
   const [user, setUser] = useState<any>(null);
   const [role, setRole] = useState<string | null>(null);
+  const [organizationId, setOrganizationId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [isProfileOpen, setIsProfileOpen] = useState(false);
+  const profileRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    const getSessionAndRole = async () => {
-      try {
-        const { data: { session } } = await supabase.auth.getSession();
-        if (session?.user) {
-          setUser(session.user);
-          // Get role from profiles table only
-          let { data: profile } = await supabase
-            .from('profiles')
-            .select('role')
-            .eq('id', session.user.id)
-            .single();
-          
-          if (profile && profile.role) {
-            setRole(profile.role);
-          } else {
-            // If no profile found, create one with default role
-            const { data: newProfile } = await supabase
-              .from('profiles')
-              .insert([{
-                id: session.user.id,
-                email: session.user.email,
-                full_name: session.user.user_metadata?.full_name || session.user.email,
-                role: 'client', // Default role
-                organization_name: session.user.user_metadata?.organization_name || ''
-              }])
-              .select()
-              .single();
-            
-            if (newProfile) {
-              setRole(newProfile.role);
-            }
-          }
-        } else {
-          setUser(null);
-          setRole(null);
-        }
-      } catch (error) {
-        console.error('Error getting session and role:', error);
-        setUser(null);
-        setRole(null);
+    function handleClickOutside(event: MouseEvent) {
+      if (profileRef.current && !profileRef.current.contains(event.target as Node)) {
+        setIsProfileOpen(false);
       }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => { document.removeEventListener("mousedown", handleClickOutside); };
+  }, [profileRef]);
+
+  useEffect(() => {
+    const fetchUserSession = async (currentUser: any) => {
+        if (!currentUser) {
+            setUser(null); setRole(null); setOrganizationId(null);
+            return;
+        }
+        setUser(currentUser);
+        try {
+            const { data: profile, error } = await supabase
+                .from('profiles')
+                .select('role')
+                .eq('id', currentUser.id)
+                .single();
+
+            if (error || !profile) throw error || new Error("Profile not found");
+            
+            setRole(profile.role);
+
+            if (profile.role === 'Client User') {
+                const { data: link } = await supabase.from('client_users').select('client_id').eq('user_id', currentUser.id).maybeSingle();
+                setOrganizationId(link?.client_id || null);
+            } else if (profile.role === 'NGO User') {
+                const { data: link } = await supabase.from('ngo_users').select('ngo_id').eq('user_id', currentUser.id).maybeSingle();
+                setOrganizationId(link?.ngo_id || null);
+            } else {
+                setOrganizationId(null);
+            }
+        } catch (error) {
+            console.error("Error fetching user session details:", error);
+            setRole(null); setOrganizationId(null);
+        }
+    };
+    
+    const initializeSession = async () => {
+      setLoading(true);
+      const { data: { session } } = await supabase.auth.getSession();
+      await fetchUserSession(session?.user || null);
       setLoading(false);
     };
-    getSessionAndRole();
-    const { data: listener } = supabase.auth.onAuthStateChange(async (_event: any, session: any) => {
-      try {
-        if (session?.user) {
-          setUser(session.user);
-          // Get role from profiles table only
-          let { data: profile } = await supabase
-            .from('profiles')
-            .select('role')
-            .eq('id', session.user.id)
-            .single();
-          
-          if (profile && profile.role) {
-            setRole(profile.role);
-          } else {
-            // If no profile found, create one with default role
-            const { data: newProfile } = await supabase
-              .from('profiles')
-              .insert([{
-                id: session.user.id,
-                email: session.user.email,
-                full_name: session.user.user_metadata?.full_name || session.user.email,
-                role: 'client', // Default role
-                organization_name: session.user.user_metadata?.organization_name || ''
-              }])
-              .select()
-              .single();
-            
-            if (newProfile) {
-              setRole(newProfile.role);
-            }
-          }
-        } else {
-          setUser(null);
-          setRole(null);
-        }
-      } catch (error) {
-        console.error('Error in auth state change:', error);
-        setUser(null);
-        setRole(null);
-      }
+    initializeSession();
+
+    const { data: authListener } = supabase.auth.onAuthStateChange(async (_event, session) => {
+      await fetchUserSession(session?.user || null);
     });
-    return () => {
-      listener?.subscription.unsubscribe();
-    };
+
+    return () => { authListener?.subscription.unsubscribe(); };
   }, []);
 
   const handleLogout = async () => {
+    setIsProfileOpen(false);
     await supabase.auth.signOut();
-    setUser(null);
-    setRole(null);
-  };
-
-  const getRoleDisplayName = () => {
-    switch (role) {
-      case 'admin':
-        return 'Admin';
-      case 'client':
-        return 'Client';
-      case 'ngo':
-        return 'NGO';
-      default:
-        return '';
-    }
   };
 
   const getSidebarItems = () => {
-    const baseItems = [
-      { name: 'Dashboard', icon: '📊', href: `/${role}-dashboard` },
-    ];
+    let dashboardHref = '/';
+    if (role === 'Platform Admin') {
+      dashboardHref = '/admin-dashboard';
+    } else if (role === 'NGO User' && organizationId) {
+      dashboardHref = `/ngo/${organizationId}`;
+    } else if (role === 'Client User' && organizationId) {
+      dashboardHref = `/client/${organizationId}`;
+    }
+
+    const baseItems = [{ name: 'Dashboard', icon: '📊', href: dashboardHref }];
+
     switch (role) {
-      case 'admin':
-        return [
-          ...baseItems,
-          { name: 'Projects', icon: '📁', href: '/admin/projects' },
-          { name: 'NGOs', icon: '🏢', href: '/admin/ngos' },
-          { name: 'Clients', icon: '👤', href: '/admin/clients' },
-          { name: 'Budgets', icon: '💰', href: '/admin/budgets' },
-          { name: 'Documents', icon: '📄', href: '/admin/documents' },
-          { name: 'Contact Us', icon: '✉️', href: '/admin/contact-us' },
-          { name: 'Users', icon: '👥', href: '/admin/users' },
-          { name: 'Activity Log', icon: '📝', href: '/admin/activity' },
-        ];
-      case 'ngo':
-        return [
-          ...baseItems,
-          { name: 'Questionnaires', icon: '📋', href: '/ngo/questionnaires' },
-          { name: 'File Uploads', icon: '📁', href: '/ngo/files' },
-          { name: 'Budget', icon: '💰', href: '/ngo/budget' },
-          { name: 'Progress', icon: '📈', href: '/ngo/progress' },
-        ];
-      case 'client':
-        return [
-          ...baseItems,
-          { name: 'Projects', icon: '📁', href: '/client/projects' },
-          { name: 'Documents', icon: '📄', href: '/client/documents' },
-          { name: 'Monitoring', icon: '📊', href: '/client/monitoring' },
-          { name: 'Notes', icon: '📝', href: '/client/notes' },
-        ];
-      default:
-        return baseItems;
+      case 'Platform Admin':
+        return [ ...baseItems, { name: 'Projects', icon: '📁', href: '/admin/projects' }, { name: 'NGOs', icon: '🏢', href: '/admin/ngos' }, { name: 'Clients', icon: '👤', href: '/admin/clients' }, { name: 'Budgets', icon: '💰', href: '/admin/budgets' }, { name: 'Documents', icon: '📄', href: '/admin/documents' }, { name: 'Contact Us', icon: '✉️', href: '/admin/contact-us' }, { name: 'Users', icon: '👥', href: '/admin/users' }, { name: 'Activity Log', icon: '📝', href: '/admin/activity' }, ];
+      case 'NGO User':
+          if (!organizationId) return baseItems;
+        return [ ...baseItems, { name: 'Questionnaires', icon: '📋', href: `/ngo/${organizationId}/questionnaires` }, { name: 'File Uploads', icon: '📁', href: `/ngo/${organizationId}/files` }, { name: 'Budget', icon: '💰', href: `/ngo/${organizationId}/budget` }, { name: 'Progress', icon: '📈', href: `/ngo/${organizationId}/progress` }, ];
+      case 'Client User':
+        if (!organizationId) return baseItems;
+        return [ ...baseItems, { name: 'Projects', icon: '📁', href: `/client/${organizationId}/projects` }, { name: 'Budget Tracker', icon: '💰', href: `/client/${organizationId}/budget` }, { name: 'Scorecard', icon: '🎯', href: `/client/${organizationId}/scorecard` }, ];
+      default: return baseItems;
     }
   };
 
-  if (loading) {
-    return (
-      <div className="login-container">
-        <div className="spinner"></div>
-      </div>
-    );
-  }
-
-  if (!user || !role) {
-    return (
-      <Router>
-        <Routes>
-          <Route path="/" element={<Home />} />
-          <Route path="/home" element={<Home />} />
-          <Route path="/login" element={<Login />} />
-          <Route path="/contact-us" element={<ContactUs />} />
-          <Route path="*" element={<Navigate to="/" replace />} />
-        </Routes>
-      </Router>
-    );
-  }
+  if (loading) { return <div className="loading-container"><div className="spinner"></div></div>; }
 
   return (
     <UIProvider>
       <Router>
-        {/* Global Header for authenticated users */}
-        {user && role && (
-          <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '1.5em 2em', background: 'var(--surface)', borderBottom: '1px solid var(--border)', position: 'fixed', top: 0, left: 0, right: 0, zIndex: 1000 }}>
-            <div style={{ fontWeight: 900, fontSize: 24, color: 'var(--primary-dark)', letterSpacing: '-1px' }}>Sarathi CSR</div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
-              <span style={{ color: 'var(--muted)', fontWeight: 500 }}>{user.email || getRoleDisplayName()}</span>
-              <button className="btn btn-secondary" onClick={handleLogout}>Logout</button>
+        {!user || !role ? (
+          <Routes>
+            <Route path="/" element={<Home />} />
+            <Route path="/login" element={<Login />} />
+            <Route path="/contact-us" element={<ContactUs />} />
+            <Route path="*" element={<Navigate to="/" replace />} />
+          </Routes>
+        ) : (
+          <>
+            <header className="app-header">
+              <div className="logo">Sarathi CSR</div>
+              <div className="profile-container" ref={profileRef}>
+                <button onClick={() => setIsProfileOpen(!isProfileOpen)} className="profile-button">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>
+                </button>
+                {isProfileOpen && (
+                  <div className="profile-dropdown">
+                    <div className="user-info">
+                      <div className="greeting">Signed in as</div>
+                      <div className="email">{user.email}</div>
+                    </div>
+                    <button onClick={handleLogout} className="logout-button"> Logout </button>
+                  </div>
+                )}
+              </div>
+            </header>
+            <div className="app-layout">
+              <aside className="sidebar">
+                <div className="sidebar-header">Navigation</div>
+                <nav>
+                  {getSidebarItems().map(item => (
+                    <NavLink key={item.href} to={item.href} className={({ isActive }) => isActive ? 'active' : ''}>
+                      <span style={{ fontSize: '1.25rem' }}>{item.icon}</span> 
+                      <span>{item.name}</span>
+                    </NavLink>
+                  ))}
+                </nav>
+              </aside>
+              <main className="main-content">
+                <Routes>
+                  {/* ADMIN ROUTES */}
+                  <Route path="/admin-dashboard" element={<AdminDashboard />} />
+                  <Route path="/admin/clients" element={<AdminClients />} />
+                  <Route path="/admin/projects" element={<AdminProjects />} />
+                  <Route path="/admin/budgets" element={<AdminBudgets />} />
+                  <Route path="/admin/ngos" element={<AdminNGOs />} />
+                  <Route path="/admin/reports" element={<AdminReports />} />
+                  <Route path="/admin/documents" element={<AdminDocuments />} />
+                  <Route path="/admin/activity" element={<AdminActivity />} />
+                  <Route path="/admin/users" element={<AdminUsers />} />
+                  <Route path="/admin/contact-us" element={<AdminContactUs />} />
+                  {/* DYNAMIC CLIENT ROUTES */}
+                  <Route path="/client/:clientId" element={<ClientDashboard user={user} />} />
+                  <Route path="/client/:clientId/projects" element={<ClientProjects />} />
+                  <Route path="/client/:clientId/budget" element={<ClientBudget />} />
+                  <Route path="/client/:clientId/scorecard" element={<ClientScorecard />} />
+                  {/* DYNAMIC NGO ROUTES */}
+                  <Route path="/ngo/:ngoId" element={<NGODashboard user={user} />} />
+                  <Route path="/ngo/:ngoId/questionnaires" element={<NGOQuestionnaires user={user} />} />
+                  <Route path="/ngo/:ngoId/files" element={<NGOFiles user={user} />} />
+                  <Route path="/ngo/:ngoId/budget" element={<NGOBudget user={user} />} />
+                  <Route path="/ngo/:ngoId/progress" element={<NGOProgress user={user} />} />
+                  {/* COMMON ROUTES */}
+                  <Route path="/compliance" element={<ComplianceTrackerPage />} />
+                  <Route path="*" element={<Navigate to={getSidebarItems()[0].href} replace />} />
+                </Routes>
+              </main>
             </div>
-          </header>
+          </>
         )}
-
-        <div style={{ display: 'flex', minHeight: '100vh', marginTop: user && role ? '80px' : 0 }}>
-          {/* Sidebar */}
-          <aside className="sidebar">
-            <div className="sidebar-header">Sarathi CSR</div>
-            <nav>
-               {getSidebarItems().map(item => (
-              <NavLink 
-                key={item.href}
-                to={item.href}
-                className={({ isActive }) => isActive ? 'active' : ''}
-                style={{ display: 'flex', alignItems: 'center', gap: 12 }}
-              >
-                <span style={{ fontSize: 20 }}>{item.icon}</span> {item.name}
-              </NavLink>
-            ))}
-            {(role === 'ngo' || role === 'client') && (
-              <NavLink 
-                to="/compliance"
-                className={({ isActive }) => isActive ? 'active' : ''}
-                style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 8 }}
-              >
-                <span style={{ fontSize: 20 }}>✅</span> Compliance Tracker
-              </NavLink>
-            )}
-            </nav>
-            {/* Remove Logout button from sidebar */}
-          </aside>
-          {/* Main Content */}
-          <main className="main-content">
-                             <Routes>
-                 <Route path="/compliance" element={(role === 'ngo' || role === 'client') ? <ComplianceTrackerPage /> : <Navigate to={`/${role}-dashboard`} replace />} />
-                 <Route
-                   path="/admin-dashboard"
-                 element={role === 'admin' ? <AdminDashboard /> : <Navigate to="/login" replace />} />
-                <Route
-                path="/admin/clients"
-                element={role === 'admin' ? <AdminClients /> : <Navigate to="/login" replace />} />
-                <Route
-                  path="/admin/projects"
-                element={role === 'admin' ? <AdminProjects /> : <Navigate to="/login" replace />} />
-                <Route
-                  path="/admin/budgets"
-                element={role === 'admin' ? <AdminBudgets /> : <Navigate to="/login" replace />} />
-                <Route
-                  path="/admin/ngos"
-                element={role === 'admin' ? <AdminNGOs /> : <Navigate to="/login" replace />} />
-                <Route
-                  path="/admin/reports"
-                element={role === 'admin' ? <AdminReports /> : <Navigate to="/login" replace />} />
-                <Route
-                  path="/admin/documents"
-                element={role === 'admin' ? <AdminDocuments /> : <Navigate to="/login" replace />} />
-                <Route
-                  path="/admin/activity"
-                element={role === 'admin' ? <AdminActivity /> : <Navigate to="/login" replace />} />
-              <Route
-                path="/admin/users"
-                element={role === 'admin' ? <AdminUsers /> : <Navigate to="/login" replace />} />
-              <Route
-                path="/admin/contact-us"
-                element={role === 'admin' ? <AdminContactUs /> : <Navigate to="/login" replace />} />
-              <Route
-                path="/client-dashboard"
-                element={role === 'client' ? <ClientDashboard user={user} /> : <Navigate to="/login" replace />} />
-                <Route
-                  path="/client/projects"
-                element={role === 'client' ? <ClientProjects user={user} /> : <Navigate to="/login" replace />} />
-                <Route
-                  path="/client/documents"
-                element={role === 'client' ? <ClientDocuments user={user} /> : <Navigate to="/login" replace />} />
-                <Route
-                  path="/client/monitoring"
-                element={role === 'client' ? <ClientMonitoring user={user} /> : <Navigate to="/login" replace />} />
-                <Route
-                  path="/client/notes"
-                element={role === 'client' ? <ClientNotes user={user} /> : <Navigate to="/login" replace />} />
-              <Route
-                path="/ngo-dashboard"
-                element={role === 'ngo' ? <NGODashboard user={user} /> : <Navigate to="/login" replace />} />
-                <Route
-                  path="/ngo/questionnaires"
-                element={role === 'ngo' ? <NGOQuestionnaires user={user} /> : <Navigate to="/login" replace />} />
-                <Route
-                  path="/ngo/files"
-                element={role === 'ngo' ? <NGOFiles user={user} /> : <Navigate to="/login" replace />} />
-                <Route
-                  path="/ngo/budget"
-                element={role === 'ngo' ? <NGOBudget user={user} /> : <Navigate to="/login" replace />} />
-                <Route
-                  path="/ngo/progress"
-                element={role === 'ngo' ? <NGOProgress user={user} /> : <Navigate to="/login" replace />} />
-                <Route
-                  path="*"
-                element={<Navigate to={`/${role}-dashboard`} replace />} />
-              </Routes>
-          </main>
-        </div>
       </Router>
     </UIProvider>
   );
 }
 
 export default App;
+

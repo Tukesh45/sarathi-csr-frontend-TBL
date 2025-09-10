@@ -3,127 +3,121 @@ import { useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 
 const Login: React.FC = () => {
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
-  const navigate = useNavigate();
+    const [email, setEmail] = useState('');
+    const [password, setPassword] = useState('');
+    const [loading, setLoading] = useState(false);
+    const [error, setError] = useState('');
+    const navigate = useNavigate();
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setLoading(true);
-    setError('');
+    const handleSubmit = async (e: React.FormEvent) => {
+        e.preventDefault();
+        setLoading(true);
+        setError('');
 
-    // 1. Authenticate with Supabase Auth
-    const { data, error: authError } = await supabase.auth.signInWithPassword({ email, password });
-    if (authError || !data.user) {
-      setError(authError?.message || 'Login failed');
-      setLoading(false);
-      return;
-    }
+        try {
+            const { data: authData, error: authError } = await supabase.auth.signInWithPassword({ email, password });
+            if (authError || !authData.user) {
+                throw authError || new Error('Login failed. Please check your credentials.');
+            }
 
-    // 2. Check profiles table for role (if exists)
-    let { data: profile } = await supabase
-      .from('profiles')
-      .select('role, id')
-      .eq('id', data.user.id)
-      .single();
-    if (profile && profile.role) {
-      if (profile.role === 'client') {
-        navigate('/client-dashboard');
-        setLoading(false);
-        return;
-      } else if (profile.role === 'ngo') {
-        navigate('/ngo-dashboard');
-        setLoading(false);
-        return;
-      } else if (profile.role === 'admin') {
-        navigate('/admin-dashboard');
-        setLoading(false);
-        return;
-      }
-    }
+            const { data: profile, error: profileError } = await supabase
+                .from('profiles')
+                .select('role')
+                .eq('id', authData.user.id)
+                .single();
 
-    // 3. Fallback to new schema logic
-    let { data: client } = await supabase
-      .from('clients')
-      .select('id')
-      .eq('id', data.user.id)
-      .single();
-    if (client) {
-      navigate('/client-dashboard');
-      setLoading(false);
-      return;
-    }
-    
-    // Check if user is an NGO by matching their email with NGO login_email
-    let { data: ngo } = await supabase
-      .from('ngos')
-      .select('id, name, login_email')
-      .eq('login_email', data.user.email)
-      .single();
-    if (ngo) {
-      navigate('/ngo-dashboard');
-      setLoading(false);
-      return;
-    }
-    
-    // Default to admin if not found in clients or ngos
-    navigate('/admin-dashboard');
-    setLoading(false);
-  };
+            if (profileError || !profile) {
+                throw new Error('Could not find user profile.');
+            }
 
-  return (
-    <div style={{ minHeight: '100vh', position: 'relative', background: 'linear-gradient(120deg, #e8f5e9 0%, #e3f2fd 100%)', padding: '2em', overflow: 'hidden' }}>
-      {/* Decorative SVG background */}
-      <svg
-        width="700" height="700" viewBox="0 0 700 700"
-        style={{ position: 'absolute', top: '-120px', left: '-120px', zIndex: 0, opacity: 0.18, pointerEvents: 'none' }}
-        aria-hidden="true"
-      >
-        <ellipse cx="350" cy="350" rx="320" ry="180" fill="#219653" />
-        <ellipse cx="500" cy="200" rx="120" ry="60" fill="#2d9cdb" />
-        <ellipse cx="200" cy="500" rx="100" ry="40" fill="#f2c94c" />
-        <ellipse cx="600" cy="600" rx="80" ry="30" fill="#17643a" />
-      </svg>
-      {/* Moving Motivational Quote */}
-      <div style={{ width: '100%', overflow: 'hidden', marginBottom: 32, position: 'relative', height: 40, zIndex: 2 }}>
-        <div style={{
-          position: 'absolute',
-          whiteSpace: 'nowrap',
-          fontSize: 20,
-          color: 'var(--primary-dark)',
-          fontWeight: 700,
-          animation: 'moveQuote 12s linear infinite',
-        }}>
-          "Together, we create a brighter, more sustainable future."
-        </div>
-      </div>
-      <style>{`
-        @keyframes moveQuote {
-          0% { left: -60%; }
-          100% { left: 110%; }
+            if (profile.role === 'Platform Admin') {
+                navigate('/admin-dashboard');
+            } else if (profile.role === 'Client User') {
+                const { data: clientLink, error: linkError } = await supabase
+                    .from('client_users')
+                    .select('client_id')
+                    .eq('user_id', authData.user.id)
+                    .single();
+                if (linkError || !clientLink) throw new Error('Client user is not linked to a company.');
+                navigate(`/client/${clientLink.client_id}`);
+            } else if (profile.role === 'NGO User') {
+                const { data: ngoLink, error: linkError } = await supabase
+                    .from('ngo_users')
+                    .select('ngo_id')
+                    .eq('user_id', authData.user.id)
+                    .single();
+                if (linkError || !ngoLink) throw new Error('NGO user is not linked to an organization.');
+                navigate(`/ngo/${ngoLink.ngo_id}`);
+            } else {
+                setError('You do not have a role assigned. Access denied.');
+            }
+
+        } catch (err: any) {
+            setError(err.message || 'An unexpected error occurred.');
+        } finally {
+            setLoading(false);
         }
-      `}</style>
-      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 40, alignItems: 'center', justifyContent: 'center', width: '100%', maxWidth: 900, margin: '0 auto', position: 'relative', zIndex: 3 }}>
-        {/* Login Card */}
-        <div className="card" style={{ maxWidth: 400, width: '100%', background: '#fff', borderRadius: 16, boxShadow: '0 2px 16px rgba(33,150,83,0.08)', padding: '2em', position: 'relative', zIndex: 4 }}>
-          <button className="btn btn-secondary" onClick={() => navigate('/')} style={{ marginBottom: 16 }}>← Back</button>
-          <h2 style={{ textAlign: 'center', marginBottom: 24 }}>Login</h2>
-          <form onSubmit={handleSubmit} autoComplete="off">
-            <label>Email
-              <input type="email" value={email} onChange={e => setEmail(e.target.value)} required />
-            </label>
-            <label>Password
-              <input type="password" value={password} onChange={e => setPassword(e.target.value)} required />
-            </label>
-            <button className="btn btn-primary" type="submit" disabled={loading} style={{ width: '100%' }}>Login</button>
-            {error && <div className="form-feedback" style={{ marginTop: 12 }}>{error}</div>}
-          </form>
-        </div>
-      </div>
-    </div>
-  );
-};
+    };
 
-export default Login; 
+    return (
+        <>
+            <style>{`
+                .login-page-container {
+                    min-height: 100vh; position: relative;
+                    background: linear-gradient(120deg, #e8f5e9 0%, #e3f2fd 100%);
+                    padding: 2em; overflow: hidden; display: flex;
+                    align-items: center; justify-content: center; box-sizing: border-box;
+                }
+                .login-content-wrapper {
+                    display: grid; grid-template-columns: 1fr 1fr; gap: 4rem;
+                    align-items: center; width: 100%; max-width: 1000px; margin: 0 auto;
+                    position: relative; z-index: 3; background: rgba(255, 255, 255, 0.6);
+                    padding: 3rem; border-radius: 24px; box-shadow: 0 8px 32px rgba(0,0,0,0.1);
+                    backdrop-filter: blur(10px); border: 1px solid rgba(255, 255, 255, 0.2);
+                }
+                .feature-highlight h1 { font-size: 2.5rem; font-weight: 900; letter-spacing: -1.5px; margin-bottom: 1rem; }
+                .feature-highlight p { font-size: 1.1rem; color: var(--muted); line-height: 1.6; }
+                .login-card h2 { text-align: center; margin-bottom: 2rem; font-size: 1.8rem; }
+                .form-group { margin-bottom: 1.25rem; }
+                .form-group label { display: block; font-weight: 600; margin-bottom: 0.5rem; color: var(--muted); font-size: 0.9rem; }
+                .form-group input { width: 100%; padding: 0.75rem 1rem; border: 1px solid var(--border); border-radius: var(--radius); background-color: #fff; font-size: 1rem; color: var(--text); transition: border-color 0.2s, box-shadow 0.2s; box-sizing: border-box; }
+                .form-group input:focus { outline: none; border-color: var(--primary); box-shadow: 0 0 0 3px rgba(33, 150, 83, 0.1); }
+                @media (max-width: 900px) {
+                    .login-content-wrapper { grid-template-columns: 1fr; padding: 2rem; }
+                    .feature-highlight { display: none; }
+                }
+            `}</style>
+            <div className="login-page-container">
+                 <div className="login-content-wrapper">
+                    <div className="feature-highlight">
+                        <h1>Welcome to Sarathi CSR</h1>
+                        <p>Empowering corporations and NGOs to create a lasting social impact. Track your projects, manage budgets, and measure your success, all in one platform.</p>
+                    </div>
+                    <div className="login-card">
+                        <h2 style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem' }}>
+                            <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/><polyline points="10 17 15 12 10 7"/><line x1="15" y1="12" x2="3" y2="12"/></svg>
+                            Secure Login
+                        </h2>
+                        <form onSubmit={handleSubmit} autoComplete="off">
+                            <div className="form-group">
+                                <label>Email Address</label>
+                                <input type="email" value={email} onChange={e => setEmail(e.target.value)} required placeholder="you@company.com" />
+                            </div>
+                            <div className="form-group">
+                                <label>Password</label>
+                                <input type="password" value={password} onChange={e => setPassword(e.target.value)} required placeholder="••••••••" />
+                            </div>
+                            <button className="btn btn-primary" type="submit" disabled={loading} style={{ width: '100%', padding: '0.75em', fontSize: '1.1rem' }}>
+                                {loading ? 'Logging in...' : 'Login'}
+                            </button>
+                            {error && <div className="form-feedback" style={{ marginTop: '1rem', color: 'var(--danger)', textAlign: 'center' }}>{error}</div>}
+                        </form>
+                         <button className="btn" onClick={() => navigate('/')} style={{ width: '100%', background: 'transparent', color: 'var(--muted)', boxShadow: 'none', marginTop: '1rem' }}>← Go to Homepage</button>
+                    </div>
+                </div>
+            </div>
+        </>
+    );
+};
+export default Login;
+

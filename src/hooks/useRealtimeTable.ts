@@ -1,22 +1,30 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '../lib/supabase';
 
-export function useRealtimeTable<T extends { id: string } = any>(table: string, filter?: { column: string; value: any }) {
+// Accepts: table, options: { select?: string, column?: string, value?: any }
+export function useRealtimeTable<T extends { id: string } = any>(
+  table: string,
+  options?: { select?: string; column?: string; value?: any }
+) {
   const [data, setData] = useState<T[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    let query = supabase.from(table).select('*');
-    if (filter) {
-      query = query.eq(filter.column, filter.value);
+    setLoading(true);
+    let query = supabase.from(table).select(options?.select || '*');
+    if (options?.column && typeof options.value !== 'undefined') {
+      // Support array values for .in() queries
+      if (Array.isArray(options.value)) {
+        query = query.in(options.column, options.value);
+      } else {
+        query = query.eq(options.column, options.value);
+      }
     }
     query.then(({ data, error }) => {
       if (error) {
-        console.error(`Error fetching ${table}:`, error);
-        setData([]);
+        setData([] as T[]);
       } else {
-        console.log(`Fetched ${table}:`, data);
-        setData(data || []);
+        setData(((data || []) as unknown) as T[]);
       }
       setLoading(false);
     });
@@ -46,7 +54,7 @@ export function useRealtimeTable<T extends { id: string } = any>(table: string, 
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [table, filter?.column, filter?.value]);
+  }, [table, options?.select, options?.column, JSON.stringify(options?.value)]);
 
   return { data, loading };
 } 

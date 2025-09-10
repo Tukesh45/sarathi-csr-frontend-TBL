@@ -4,7 +4,7 @@ import ActivityFeed from '../components/ActivityFeed';
 import DocumentPreview from '../components/DocumentPreview';
 import { useRealtimeTable } from '../hooks/useRealtimeTable';
 import { supabase } from '../lib/supabase';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 
 interface NGODashboardProps {
   user: any;
@@ -12,16 +12,18 @@ interface NGODashboardProps {
 
 const NGODashboard: React.FC<NGODashboardProps> = ({ user }) => {
   const navigate = useNavigate();
+  const location = useLocation();
+  const [loading, setLoading] = useState(true);
   
   // Get NGO record for this user
   const [ngoRecord, setNgoRecord] = useState<any>(null);
-  const [loading, setLoading] = useState(true);
   
-  // Get NGO data for the logged-in user - optimized loading
-  const { data: ngoUsers = [], loading: loadingNgoUsers } = useRealtimeTable('ngo_users');
-  const { data: ngos = [], loading: loadingNgos } = useRealtimeTable('ngos');
+  // Optimized real-time data hooks (fetch only required columns)
+  const { data: ngoUsers = [], loading: loadingNgoUsers } = useRealtimeTable('ngo_users', { select: 'user_id,ngo_id' });
+  const { data: ngos = [], loading: loadingNgos } = useRealtimeTable('ngos', { select: 'id,name,user_id' });
   
   useEffect(() => {
+    setLoading(true);
     const getNgoRecord = async () => {
       try {
         console.log('NGODashboard: Looking for NGO record for user:', user.id);
@@ -68,7 +70,7 @@ const NGODashboard: React.FC<NGODashboardProps> = ({ user }) => {
     
     // Only wait for the data we actually need
     if (!loadingNgoUsers && !loadingNgos) {
-      getNgoRecord();
+    getNgoRecord();
     }
     
     // Add timeout to prevent infinite loading
@@ -83,21 +85,31 @@ const NGODashboard: React.FC<NGODashboardProps> = ({ user }) => {
   }, [user.id, ngoUsers, ngos, loadingNgoUsers, loadingNgos, loading]);
   
   // Filter all data by the NGO's ID (not user.id)
-  const { data: projects = [] } = useRealtimeTable('projects', { 
+  const { data: projects = [], loading: loadingProjects } = useRealtimeTable('projects', { 
     column: 'ngo_id', 
-    value: ngoRecord?.id || 'no-ngo-id' 
+    value: ngoRecord?.id || 'no-ngo-id',
+    select: 'id,title,status,goal,start_date,end_date,client_id'
   });
-  const { data: clients = [] } = useRealtimeTable('clients');
-  const { data: targets = [] } = useRealtimeTable('project_metrics');
-  const { data: progressUpdates = [] } = useRealtimeTable('quarterly_progress', { 
+  const { data: clients = [], loading: loadingClients } = useRealtimeTable('clients', { select: 'id,company_name' });
+  const { data: targets = [], loading: loadingTargets } = useRealtimeTable('project_metrics', { select: 'id,project_id,metric_name,target_value,unit,baseline_value,measurement_frequency' });
+  const { data: progressUpdates = [], loading: loadingProgressUpdates } = useRealtimeTable('quarterly_progress', { 
     column: 'project_id', 
-    value: projects.map((p: any) => p.id) 
+    value: projects.map((p: any) => p.id),
+    select: 'id,target_id,ngo_id,quarter,year,actual_value,notes,evidence_upload,challenges,reported_by,verified_by,verification_date'
   });
-  const { data: files = [] } = useRealtimeTable('documents', { 
+  const { data: files = [], loading: loadingFiles } = useRealtimeTable('documents', { 
     column: 'ngo_id', 
-    value: ngoRecord?.id || 'no-ngo-id' 
+    value: ngoRecord?.id || 'no-ngo-id',
+    select: 'id,file_url,file_type,file_name'
   });
-  const { data: budgets = [] } = useRealtimeTable('budget_allocations');
+  const { data: budgets = [], loading: loadingBudgets } = useRealtimeTable('budget_allocations', { select: 'id,project_id,total_budget' });
+
+  useEffect(() => {
+    setLoading(true);
+    if (!loadingProjects && !loadingClients && !loadingTargets && !loadingProgressUpdates && !loadingFiles && !loadingBudgets) {
+      setLoading(false);
+    }
+  }, [loadingProjects, loadingClients, loadingTargets, loadingProgressUpdates, loadingFiles, loadingBudgets, loading]);
 
   // Filter budgets for this NGO's projects
   const myBudgets = budgets.filter((budget: any) => 
@@ -325,16 +337,21 @@ const NGODashboard: React.FC<NGODashboardProps> = ({ user }) => {
   );
 
   if (loading) {
+    // Simple skeleton loader
     return (
-      <div className="card" style={{ padding: 32 }}>
-        <div className="loading-spinner">
-          <div>Loading NGO Dashboard...</div>
-          <div style={{ fontSize: '14px', color: '#6b7280', marginTop: '8px' }}>
-            {loadingNgoUsers ? 'Loading user relationships...' : ''}
-            {loadingNgos ? 'Loading NGO data...' : ''}
-            {!loadingNgoUsers && !loadingNgos ? 'Finding your NGO record...' : ''}
-          </div>
+      <div style={{ padding: 32 }}>
+        <div className="skeleton" style={{ height: 40, width: 200, marginBottom: 24, background: '#eee', borderRadius: 8 }} />
+        <div style={{ display: 'flex', gap: 32, marginBottom: 32 }}>
+          {[...Array(5)].map((_, i) => (
+            <div key={i} className="skeleton" style={{ height: 80, width: 160, background: '#eee', borderRadius: 8 }} />
+          ))}
         </div>
+        <div className="skeleton" style={{ height: 320, width: '100%', background: '#eee', borderRadius: 12, marginBottom: 32 }} />
+        <div className="skeleton" style={{ height: 320, width: '100%', background: '#eee', borderRadius: 12, marginBottom: 32 }} />
+        <div className="skeleton" style={{ height: 40, width: 300, background: '#eee', borderRadius: 8, marginBottom: 16 }} />
+        <div className="skeleton" style={{ height: 200, width: '100%', background: '#eee', borderRadius: 8, marginBottom: 32 }} />
+        <div className="skeleton" style={{ height: 40, width: 300, background: '#eee', borderRadius: 8, marginBottom: 16 }} />
+        <div className="skeleton" style={{ height: 200, width: '100%', background: '#eee', borderRadius: 8 }} />
       </div>
     );
   }

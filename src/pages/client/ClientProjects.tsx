@@ -1,58 +1,83 @@
 import React from 'react';
-import { useRealtimeTable } from '../../hooks/useRealtimeTable';
+import { useState, useEffect } from 'react';
+import { supabase } from '../../lib/supabase';
+import { useParams } from 'react-router-dom';
 
-interface ClientProjectsProps {
-  user: any;
-}
+const Card = ({ children, className = '' }: { children: React.ReactNode, className?: string }) => (
+    <div className={`bg-white rounded-xl shadow-md p-6 ${className}`}>{children}</div>
+);
 
-const ClientProjects: React.FC<ClientProjectsProps> = ({ user }) => {
-  const { data: projects = [], loading } = useRealtimeTable('projects', { column: 'client_id', value: user.id });
+const ClientProjects = () => {
+    const { clientId } = useParams<{ clientId: string }>();
+    const [loading, setLoading] = useState(true);
+    const [projects, setProjects] = useState<any[]>([]);
+    const [budgets, setBudgets] = useState<any[]>([]);
 
-  if (loading) return <div>Loading...</div>;
+    useEffect(() => {
+        const fetchData = async () => {
+            if (!clientId) return;
+            setLoading(true);
+            try {
+                const { data: projectData } = await supabase.from('projects').select('id, title, ngos(name)').eq('client_id', clientId);
+                setProjects(projectData || []);
 
-  return (
-    <div className="card">
-      <h2>My Projects</h2>
-      {projects.length === 0 ? (
-        <div className="empty-state">
-          <div className="empty-state-illustration">📁</div>
-          <div className="mb-2 font-bold">No Projects Yet</div>
-          <div>Projects assigned to your organization will appear here.</div>
+                const projectIds = projectData?.map(p => p.id) || [];
+                if (projectIds.length > 0) {
+                    const { data: budgetData } = await supabase.from('budget_allocations').select('*').in('project_id', projectIds);
+                    setBudgets(budgetData || []);
+                }
+            } catch (error) {
+                console.error("Error fetching project details:", error);
+            } finally {
+                setLoading(false);
+            }
+        };
+        fetchData();
+    }, [clientId]);
+    
+    if (loading) return <div className="p-8">Loading Project Details...</div>;
+
+    return (
+        <div className="p-6 md:p-8 space-y-8 bg-gray-50 min-h-full">
+             <header>
+                <h1 className="text-3xl font-bold text-gray-800">Project Details</h1>
+                <p className="text-gray-600">Quarterly funding details for all your projects.</p>
+            </header>
+            <Card>
+                <div className="overflow-x-auto">
+                    <table className="w-full text-left">
+                        <thead className="bg-gray-50 text-xs text-gray-700 uppercase">
+                            <tr>
+                                <th className="p-3">Project</th>
+                                <th className="p-3">NGO</th>
+                                <th className="p-3 text-right">Q1 Budget</th>
+                                <th className="p-3 text-right">Q2 Budget</th>
+                                <th className="p-3 text-right">Q3 Budget</th>
+                                <th className="p-3 text-right">Q4 Budget</th>
+                                <th className="p-3 text-right">Total Budget</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {projects.map((project) => {
+                                const budget = budgets.find(b => b.project_id === project.id);
+                                return (
+                                    <tr key={project.id} className="border-b hover:bg-gray-50">
+                                        <td className="p-3 font-medium text-gray-900">{project.title}</td>
+                                        <td className="p-3 text-gray-600">{project.ngos.name}</td>
+                                        <td className="p-3 text-right">₹{budget?.q1_budget?.toLocaleString() || 0}</td>
+                                        <td className="p-3 text-right">₹{budget?.q2_budget?.toLocaleString() || 0}</td>
+                                        <td className="p-3 text-right">₹{budget?.q3_budget?.toLocaleString() || 0}</td>
+                                        <td className="p-3 text-right">₹{budget?.q4_budget?.toLocaleString() || 0}</td>
+                                        <td className="p-3 font-semibold text-right">₹{budget?.total_budget?.toLocaleString() || 0}</td>
+                                    </tr>
+                                )
+                            })}
+                        </tbody>
+                    </table>
+                </div>
+            </Card>
         </div>
-      ) : (
-        <table className="table">
-          <thead>
-            <tr>
-              <th>Title</th>
-              <th>Status</th>
-              <th>Priority</th>
-              <th>Goal</th>
-              <th>Geographic Scope</th>
-              <th>Unit</th>
-              <th>Beneficiaries</th>
-              <th>Start</th>
-              <th>End</th>
-            </tr>
-          </thead>
-          <tbody>
-            {projects.map((project: any) => (
-              <tr key={project.id}>
-                <td>{project.title}</td>
-                <td>{project.status}</td>
-                <td>{project.priority}</td>
-                <td>{project.goal}</td>
-                <td>{project.geographic_scope}</td>
-                <td>{project.unit_of_measurement}</td>
-                <td>{project.target_beneficiaries}</td>
-                <td>{project.start_date ? new Date(project.start_date).toLocaleDateString() : ''}</td>
-                <td>{project.end_date ? new Date(project.end_date).toLocaleDateString() : ''}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      )}
-    </div>
-  );
+    );
 };
 
-export default ClientProjects; 
+export default ClientProjects;
