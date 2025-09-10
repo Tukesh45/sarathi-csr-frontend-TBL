@@ -119,6 +119,7 @@ const AdminProjects: React.FC<AdminProjectsProps> = ({ initialClientId, initialN
     setFormError('');
     if (!form.title || !form.client_id || !form.ngo_id) {
       setFormError('Title, Client, and NGO are required.');
+      setSubmitting(false); // Ensure submitting is reset on validation error
       return;
     }
     setSubmitting(true);
@@ -150,6 +151,8 @@ const AdminProjects: React.FC<AdminProjectsProps> = ({ initialClientId, initialN
       }
     } catch (err: any) {
       setFormError(err.message || 'Error occurred.');
+      setSubmitting(false); // Ensure submitting is reset on error
+      return;
     }
     setSubmitting(false);
   };
@@ -265,6 +268,9 @@ const AdminProjects: React.FC<AdminProjectsProps> = ({ initialClientId, initialN
       </div>
     );
   }
+
+  // Add form state debug log before the main return
+  console.log(form);
 
   const handleLogout = async () => {
     await supabase.auth.signOut();

@@ -42,7 +42,6 @@ const AdminUsers: React.FC = () => {
     console.log('Client Users count:', clientUsers.length, 'Data:', clientUsers);
     console.log('NGO Users count:', ngoUsers.length, 'Data:', ngoUsers);
     
-    // Check for any empty or error states
     if (profiles.length === 0) {
       console.warn('No profiles found - this might indicate a connection issue');
     }
@@ -70,7 +69,6 @@ const AdminUsers: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [roleFilter, setRoleFilter] = useState('all');
 
-  // Filter users based on search and role
   const filteredUsers = profiles.filter((user: any) => {
     const matchesSearch = user.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
                          user.full_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -81,7 +79,6 @@ const AdminUsers: React.FC = () => {
 
   const openModal = (user?: any) => {
     if (user) {
-      // Edit existing user
       setForm({
         email: user.email || '',
         full_name: user.full_name || '',
@@ -92,7 +89,6 @@ const AdminUsers: React.FC = () => {
       });
       setEditingId(user.id);
     } else {
-      // Create new user
       setForm({
         email: '',
         full_name: '',
@@ -128,7 +124,6 @@ const AdminUsers: React.FC = () => {
 
     try {
       if (editingId) {
-        // Update existing user
         const { error: profileError } = await supabase
           .from('profiles')
           .update({
@@ -142,44 +137,13 @@ const AdminUsers: React.FC = () => {
 
         if (profileError) throw profileError;
 
-        // If user role is changed to NGO, ensure they have an NGO record
-        if (form.role === 'ngo') {
-          const existingNgo = ngos.find((n: any) => n.user_id === editingId);
-          if (!existingNgo) {
-            // Create NGO record for this user
-            const { data: newNgo, error: ngoError } = await supabase
-              .from('ngos')
-              .insert([{
-                name: form.organization_name || 'NGO Organization',
-                registration_number: 'NGO_REG_' + Math.random().toString(36).substr(2, 9),
-                focus_areas: 'Focus areas to be defined',
-                geographic_coverage: 'Geographic coverage to be defined',
-                contact_person: form.full_name,
-                login_email: form.email,
-                user_id: editingId
-              }])
-              .select()
-              .single();
-            
-            if (ngoError) {
-              console.error('Error creating NGO record:', ngoError);
-            } else if (newNgo) {
-              console.log('Created NGO record for user:', newNgo);
-            }
-          }
-        }
-
         // Update client access
         const currentClientIds = clientUsers.filter((cu: any) => cu.user_id === editingId).map((cu: any) => cu.client_id);
-        
-        // Add new client access
         for (const clientId of form.selectedClients) {
           if (!currentClientIds.includes(clientId)) {
             await supabase.from('client_users').insert([{ user_id: editingId, client_id: clientId }]);
           }
         }
-        
-        // Remove unselected client access
         for (const clientId of currentClientIds) {
           if (!form.selectedClients.includes(clientId)) {
             await supabase.from('client_users').delete().eq('user_id', editingId).eq('client_id', clientId);
@@ -188,28 +152,15 @@ const AdminUsers: React.FC = () => {
 
         // Update NGO access
         const currentNGOIds = ngoUsers.filter((nu: any) => nu.user_id === editingId).map((nu: any) => nu.ngo_id);
-        
-        // Add new NGO access
         for (const ngoId of form.selectedNGOs) {
           if (!currentNGOIds.includes(ngoId)) {
-            // First, ensure the NGO record exists and is properly linked
             const ngoRecord = ngos.find((n: any) => n.id === ngoId);
-            if (ngoRecord) {
-              // Update NGO record to link with this user if not already linked
-              if (!ngoRecord.user_id) {
-                await supabase
-                  .from('ngos')
-                  .update({ user_id: editingId })
-                  .eq('id', ngoId);
-              }
+            if (ngoRecord && !ngoRecord.user_id) {
+              await supabase.from('ngos').update({ user_id: editingId }).eq('id', ngoId);
             }
-            
-            // Create the ngo_users relationship
             await supabase.from('ngo_users').insert([{ user_id: editingId, ngo_id: ngoId }]);
           }
         }
-        
-        // Remove unselected NGO access
         for (const ngoId of currentNGOIds) {
           if (!form.selectedNGOs.includes(ngoId)) {
             await supabase.from('ngo_users').delete().eq('user_id', editingId).eq('ngo_id', ngoId);
@@ -218,7 +169,6 @@ const AdminUsers: React.FC = () => {
 
         setFeedback('User updated successfully!');
       } else {
-        // Create new user (this would require auth signup in a real app)
         setFeedback('User creation requires authentication setup. Please contact the system administrator.');
       }
 
@@ -266,16 +216,16 @@ const AdminUsers: React.FC = () => {
     const userClients = clientUsers.filter((cu: any) => cu.user_id === user.id);
     const userNGOs = ngoUsers.filter((nu: any) => nu.user_id === user.id);
     
-    if (user.role === 'client' && userClients.length > 0) {
-      return userClients.map((cu: any) => 
-        clients.find((c: any) => c.id === cu.client_id)?.company_name
-      ).filter(Boolean).join(', ');
-    }
-    
-    if (user.role === 'ngo' && userNGOs.length > 0) {
-      return userNGOs.map((nu: any) => 
-        ngos.find((n: any) => n.id === nu.ngo_id)?.name
-      ).filter(Boolean).join(', ');
+    const clientNames = userClients.map((cu: any) => 
+      clients.find((c: any) => c.id === cu.client_id)?.company_name
+    ).filter(Boolean);
+
+    const ngoNames = userNGOs.map((nu: any) => 
+      ngos.find((n: any) => n.id === nu.ngo_id)?.name
+    ).filter(Boolean);
+
+    if (clientNames.length || ngoNames.length) {
+      return [...clientNames, ...ngoNames].join(', ');
     }
     
     return 'No access assigned';
@@ -428,7 +378,7 @@ const AdminUsers: React.FC = () => {
                   value={form.email}
                   onChange={handleChange}
                   required
-                  disabled={!!editingId} // Don't allow email changes for existing users
+                  disabled={!!editingId}
                 />
               </label>
 
@@ -462,47 +412,44 @@ const AdminUsers: React.FC = () => {
                 </select>
               </label>
 
-              {form.role === 'client' && (
-                <label>
-                  Client Access
-                  <select 
-                    multiple 
-                    value={form.selectedClients} 
-                    onChange={(e) => handleMultiSelect(e, 'selectedClients')}
-                    style={{ minHeight: '100px' }}
-                  >
-                    {clients.map((c: any) => (
-                      <option key={c.id} value={c.id}>
-                        {c.company_name || c.name}
-                      </option>
-                    ))}
-                  </select>
-                  <div style={{ fontSize: '12px', color: '#6b7280', marginTop: '4px' }}>
-                    Hold Ctrl/Cmd to select multiple clients
-                  </div>
-                </label>
-              )}
+              {/* Always show Client + NGO access */}
+              <label>
+                Client Access
+                <select 
+                  multiple 
+                  value={form.selectedClients} 
+                  onChange={(e) => handleMultiSelect(e, 'selectedClients')}
+                  style={{ minHeight: '100px' }}
+                >
+                  {clients.map((c: any) => (
+                    <option key={c.id} value={c.id}>
+                      {c.company_name || c.name}
+                    </option>
+                  ))}
+                </select>
+                <div style={{ fontSize: '12px', color: '#6b7280', marginTop: '4px' }}>
+                  Hold Ctrl/Cmd to select multiple clients
+                </div>
+              </label>
 
-              {form.role === 'ngo' && (
-                <label>
-                  NGO Access
-                  <select 
-                    multiple 
-                    value={form.selectedNGOs} 
-                    onChange={(e) => handleMultiSelect(e, 'selectedNGOs')}
-                    style={{ minHeight: '100px' }}
-                  >
-                    {ngos.map((n: any) => (
-                      <option key={n.id} value={n.id}>
-                        {n.name}
-                      </option>
-                    ))}
-                  </select>
-                  <div style={{ fontSize: '12px', color: '#6b7280', marginTop: '4px' }}>
-                    Hold Ctrl/Cmd to select multiple NGOs
-                  </div>
-                </label>
-              )}
+              <label>
+                NGO Access
+                <select 
+                  multiple 
+                  value={form.selectedNGOs} 
+                  onChange={(e) => handleMultiSelect(e, 'selectedNGOs')}
+                  style={{ minHeight: '100px' }}
+                >
+                  {ngos.map((n: any) => (
+                    <option key={n.id} value={n.id}>
+                      {n.name}
+                    </option>
+                  ))}
+                </select>
+                <div style={{ fontSize: '12px', color: '#6b7280', marginTop: '4px' }}>
+                  Hold Ctrl/Cmd to select multiple NGOs
+                </div>
+              </label>
 
               <div style={{ marginTop: 24, display: 'flex', gap: 12 }}>
                 <button 
@@ -545,50 +492,70 @@ const AdminUsers: React.FC = () => {
           position: fixed; 
           top: 0; 
           left: 0; 
-          width: 100vw; 
-          height: 100vh;
+          right: 0; 
+          bottom: 0; 
           background: rgba(0,0,0,0.5); 
           display: flex; 
           align-items: center; 
-          justify-content: center; 
-          z-index: 2000;
+          justify-content: center;
+          z-index: 1000;
         }
         .modal {
-          background: #fff; 
-          padding: 32px; 
-          border-radius: 12px; 
-          min-width: 400px; 
-          max-width: 600px; 
-          box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+          background: white; 
+          padding: 24px; 
+          border-radius: 8px; 
+          width: 100%; 
+          max-width: 500px; 
+          max-height: 90vh; 
           overflow-y: auto;
-          max-height: 90vh;
         }
         .modal h3 {
-          margin-bottom: 24px;
-          color: #1f2937;
+          margin-bottom: 16px;
+          font-size: 20px;
+          font-weight: 600;
         }
-        .modal label { 
-          display: block; 
-          margin-bottom: 16px; 
-          font-weight: 500;
-          color: #374151;
+        .modal form {
+          display: flex;
+          flex-direction: column;
+          gap: 16px;
         }
-        .modal input, .modal select { 
-          width: 100%; 
-          padding: 10px 12px; 
-          margin-top: 6px; 
-          border: 1px solid #d1d5db; 
+        .modal label {
+          display: flex;
+          flex-direction: column;
+          gap: 4px;
+        }
+        .modal input, .modal select {
+          padding: 8px 12px;
+          border: 1px solid #d1d5db;
           border-radius: 6px;
           font-size: 14px;
         }
-        .modal input:focus, .modal select:focus {
-          outline: none;
-          border-color: #2563eb;
-          box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+        .btn {
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          padding: 6px 12px;
+          border-radius: 6px;
+          font-size: 14px;
+          font-weight: 500;
+          cursor: pointer;
+          border: none;
         }
-        .modal input:disabled {
-          background-color: #f9fafb;
-          color: #6b7280;
+        .btn-primary {
+          background-color: #2563eb;
+          color: white;
+        }
+        .btn-success {
+          background-color: #059669;
+          color: white;
+        }
+        .btn-secondary {
+          background-color: #6b7280;
+          color: white;
+        }
+        .btn-xs {
+          padding: 4px 8px;
+          font-size: 12px;
         }
         .table {
           width: 100%;
@@ -596,20 +563,32 @@ const AdminUsers: React.FC = () => {
         }
         .table th, .table td {
           padding: 12px;
-          text-align: left;
           border-bottom: 1px solid #e5e7eb;
+          text-align: left;
         }
         .table th {
-          background-color: #f9fafb;
+          font-size: 14px;
           font-weight: 600;
           color: #374151;
         }
-        .table tbody tr:hover {
-          background-color: #f9fafb;
+        .table td {
+          font-size: 14px;
+          color: #1f2937;
+        }
+        .card {
+          background: white;
+          padding: 24px;
+          border-radius: 12px;
+          box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+        .loading-spinner {
+          text-align: center;
+          font-size: 16px;
+          color: #6b7280;
         }
       `}</style>
     </div>
   );
 };
 
-export default AdminUsers; 
+export default AdminUsers;

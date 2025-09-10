@@ -4,6 +4,7 @@ import ScoreCard from '../components/ScoreCard';
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, Legend, ResponsiveContainer, LabelList
 } from 'recharts';
+import { useLocation } from 'react-router-dom';
 
 // Simple Pie Chart component for status breakdown
 const PieChart = ({ data }: { data: { label: string; value: number; color: string }[] }) => {
@@ -28,11 +29,23 @@ const PieChart = ({ data }: { data: { label: string; value: number; color: strin
 };
 
 const AdminDashboard: React.FC = () => {
-  // Real-time data hooks
-  const { data: projects = [] } = useRealtimeTable('projects');
-  const { data: ngos = [] } = useRealtimeTable('ngos');
-  const { data: clients = [] } = useRealtimeTable('clients');
-  const { data: budgets = [] } = useRealtimeTable('budget_allocations');
+  const location = useLocation();
+  // Add loading state
+  const [loading, setLoading] = React.useState(true);
+
+  // Real-time data hooks (fetch only required columns)
+  const { data: projects = [], loading: loadingProjects } = useRealtimeTable('projects', { select: 'id,title,status,priority,ngo_id,client_id,start_date,end_date,geographic_scope,target_beneficiaries' });
+  const { data: ngos = [], loading: loadingNGOs } = useRealtimeTable('ngos', { select: 'id,name,registration_number,focus_areas,contact_person,client_id' });
+  const { data: clients = [], loading: loadingClients } = useRealtimeTable('clients', { select: 'id,name' });
+  const { data: budgets = [], loading: loadingBudgets } = useRealtimeTable('budget_allocations', { select: 'id,project_id,total_budget,spent_amount' });
+
+  React.useEffect(() => {
+    setLoading(true);
+    // Wait for all loading flags to be false
+    if (!loadingProjects && !loadingNGOs && !loadingClients && !loadingBudgets) {
+      setLoading(false);
+    }
+  }, [loadingProjects, loadingNGOs, loadingClients, loadingBudgets, location]);
 
   // KPI cards
   const totalProjects = projects.length;
@@ -94,6 +107,26 @@ const AdminDashboard: React.FC = () => {
     }, 0);
     return { name: ngo.name, budget, spent };
   });
+
+  if (loading) {
+    // Simple skeleton loader
+    return (
+      <div style={{ padding: 32 }}>
+        <div className="skeleton" style={{ height: 40, width: 200, marginBottom: 24, background: '#eee', borderRadius: 8 }} />
+        <div style={{ display: 'flex', gap: 32, marginBottom: 32 }}>
+          {[...Array(5)].map((_, i) => (
+            <div key={i} className="skeleton" style={{ height: 80, width: 160, background: '#eee', borderRadius: 8 }} />
+          ))}
+        </div>
+        <div className="skeleton" style={{ height: 320, width: '100%', background: '#eee', borderRadius: 12, marginBottom: 32 }} />
+        <div className="skeleton" style={{ height: 320, width: '100%', background: '#eee', borderRadius: 12, marginBottom: 32 }} />
+        <div className="skeleton" style={{ height: 40, width: 300, background: '#eee', borderRadius: 8, marginBottom: 16 }} />
+        <div className="skeleton" style={{ height: 200, width: '100%', background: '#eee', borderRadius: 8, marginBottom: 32 }} />
+        <div className="skeleton" style={{ height: 40, width: 300, background: '#eee', borderRadius: 8, marginBottom: 16 }} />
+        <div className="skeleton" style={{ height: 200, width: '100%', background: '#eee', borderRadius: 8 }} />
+      </div>
+    );
+  }
 
   return (
     <div className="card" style={{ padding: 32, marginBottom: 32 }}>
