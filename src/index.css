@@ -64,7 +64,7 @@ h1, h2, h3, h4, h5, h6 {
 .sidebar {
   background: var(--primary-dark);
   color: #fff;
-  width: 240px;
+  width: 250px;
   flex-shrink: 0;
   height: calc(100vh - 80px); /* Fill remaining height */
   position: fixed;
@@ -78,7 +78,7 @@ h1, h2, h3, h4, h5, h6 {
 
 .sidebar-header {
   padding: 0.5rem 1rem 1rem 1rem;
-  font-size: 0.75rem;
+  font-size: 15px;
   font-weight: bold;
   text-transform: uppercase;
   color: #a7f3d0;
@@ -157,8 +157,14 @@ h1, h2, h3, h4, h5, h6 {
   border-bottom: 1px solid var(--border);
   margin-bottom: 0.5rem;
 }
-
-.profile-dropdown .user-info .greeting {
+.role {
+  text-transform: uppercase;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--success);
+  margin-bottom: 0.25rem;
+}
+.profile-dropdown .user-info .greeting  {
   font-weight: 600;
   font-size: 0.9rem;
   color: var(--text);
@@ -208,6 +214,14 @@ h1, h2, h3, h4, h5, h6 {
   transition: background 0.2s;
   box-shadow: var(--shadow);
 }
+
+.btn:hover {
+  opacity: 0.9;
+  transform: scale(1.05);
+  transition: transform 0.3s ease;
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2); background: var(--success);
+}
+
 .btn-secondary {
   background: var(--muted);
   color: #fff;

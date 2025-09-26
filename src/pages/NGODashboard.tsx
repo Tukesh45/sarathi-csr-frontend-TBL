@@ -531,4 +531,4 @@ const NGODashboard: React.FC<NGODashboardProps> = ({ user }) => {
   );
 };
 
-export default NGODashboard; 
+export default NGODashboard;

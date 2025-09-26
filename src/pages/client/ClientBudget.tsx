@@ -17,17 +17,34 @@ const ClientBudget = () => {
     const fetchData = async () => {
         if (!clientId) return;
         try {
-            const { data: projectData } = await supabase.from('projects').select('*, ngos(*)').eq('client_id', clientId);
+            const { data: projectData } = await supabase
+                .from('projects')
+                .select('*, ngos(*)')
+                .eq('client_id', clientId);
+
             setProjects(projectData || []);
-            const partnerNgos = Array.from(new Map(projectData?.map(p => p.ngos).filter(Boolean).map((ngo: any) => [ngo.id, ngo])).values());
+
+            const partnerNgos = Array.from(
+                new Map(
+                    projectData
+                        ?.map(p => p.ngos)
+                        .filter(Boolean)
+                        .map((ngo: any) => [ngo.id, ngo])
+                ).values()
+            );
             setNgos(partnerNgos);
 
             const projectIds = projectData?.map(p => p.id) || [];
             if (projectIds.length > 0) {
-                const { data: budgetData } = await supabase.from('budget_allocations').select('*').in('project_id', projectIds);
+                const { data: budgetData } = await supabase
+                    .from('budget_allocations')
+                    .select('*')
+                    .in('project_id', projectIds);
                 setBudgets(budgetData || []);
             }
-        } catch (error) { console.error("Error fetching budget data:", error); }
+        } catch (error) {
+            console.error('Error fetching budget data:', error);
+        }
     };
 
     useEffect(() => {
@@ -44,17 +61,35 @@ const ClientBudget = () => {
         setBudgets(currentBudgets => {
             const existingBudgetIndex = currentBudgets.findIndex(b => b.project_id === projectId);
             let newBudgets = [...currentBudgets];
-            
+
             if (existingBudgetIndex > -1) {
-                newBudgets[existingBudgetIndex] = { ...newBudgets[existingBudgetIndex], [field]: numericValue };
+                newBudgets[existingBudgetIndex] = {
+                    ...newBudgets[existingBudgetIndex],
+                    [field]: numericValue,
+                };
             } else {
-                newBudgets.push({ project_id: projectId, total_budget: 0, q1_budget: 0, q2_budget: 0, q3_budget: 0, q4_budget: 0, [field]: numericValue });
+                newBudgets.push({
+                    project_id: projectId,
+                    total_budget: 0,
+                    q1_budget: 0,
+                    q2_budget: 0,
+                    q3_budget: 0,
+                    q4_budget: 0,
+                    contingency_budget: 0, // <-- ADDED: Initialize contingency
+                    [field]: numericValue,
+                });
             }
 
-            // Recalculate total if a quarterly budget was changed
             const budgetToUpdate = newBudgets.find(b => b.project_id === projectId);
-            if(budgetToUpdate && field !== 'total_budget') {
-                budgetToUpdate.total_budget = (budgetToUpdate.q1_budget || 0) + (budgetToUpdate.q2_budget || 0) + (budgetToUpdate.q3_budget || 0) + (budgetToUpdate.q4_budget || 0);
+            if (budgetToUpdate) {
+                // --- MODIFIED CALCULATION ---
+                // Now includes contingency budget to match the database check constraint.
+                budgetToUpdate.total_budget =
+                    (budgetToUpdate.q1_budget || 0) +
+                    (budgetToUpdate.q2_budget || 0) +
+                    (budgetToUpdate.q3_budget || 0) +
+                    (budgetToUpdate.q4_budget || 0) +
+                    (budgetToUpdate.contingency_budget || 0); // <-- ADDED
             }
             return newBudgets;
         });
@@ -63,19 +98,23 @@ const ClientBudget = () => {
     const handleSaveBudgets = async () => {
         setFeedback('Saving...');
         try {
-            const budgetsToSave = budgets.filter(b => projects.some(p => p.id === b.project_id));
+            const budgetsToSave = budgets.filter(b =>
+                projects.some(p => p.id === b.project_id)
+            );
             if (budgetsToSave.length === 0) {
-                 setFeedback('No budget changes to save.');
-                 setTimeout(() => setFeedback(''), 2000);
-                 return;
+                setFeedback('No budget changes to save.');
+                setTimeout(() => setFeedback(''), 2000);
+                return;
             }
 
-            const { error } = await supabase.from('budget_allocations').upsert(budgetsToSave, { onConflict: 'project_id' });
+            const { error } = await supabase
+                .from('budget_allocations')
+                .upsert(budgetsToSave, { onConflict: 'project_id' });
             if (error) throw error;
-            
+
             setFeedback('Budgets saved successfully!');
         } catch (error) {
-            console.error("Error saving budgets:", error);
+            console.error('Error saving budgets:', error);
             setFeedback('Failed to save budgets.');
         }
         setTimeout(() => setFeedback(''), 3000);
@@ -84,7 +123,7 @@ const ClientBudget = () => {
     const projectsByNgo = useMemo(() => {
         return ngos.map(ngo => ({
             ...ngo,
-            projects: projects.filter(p => p.ngo_id === ngo.id)
+            projects: projects.filter(p => p.ngo_id === ngo.id),
         }));
     }, [ngos, projects]);
 
@@ -94,11 +133,17 @@ const ClientBudget = () => {
         <div className="p-6 md:p-8 space-y-8 bg-gray-50 min-h-full">
             <header className="flex justify-between items-center">
                 <div>
-                    <h1 className="text-3xl font-bold text-gray-800">Budget Tracker & Allocation</h1>
-                    <p className="text-gray-600">Allocate your CSR budget across projects and quarters in real-time.</p>
+                    <h1 className="text-3xl font-bold text-gray-800">
+                        Budget Tracker & Allocation
+                    </h1>
+                    <p className="text-gray-600">
+                        Allocate your CSR budget across projects and quarters in real-time.
+                    </p>
                 </div>
                 <div>
-                    <button className="btn btn-success" onClick={handleSaveBudgets}>Save All Changes</button>
+                    <button className="btn btn-success" onClick={handleSaveBudgets}>
+                        Save All Changes
+                    </button>
                     {feedback && <span className="text-sm ml-4 font-medium">{feedback}</span>}
                 </div>
             </header>
@@ -116,6 +161,8 @@ const ClientBudget = () => {
                                         <th className="p-2 text-right">Q2 Budget (₹)</th>
                                         <th className="p-2 text-right">Q3 Budget (₹)</th>
                                         <th className="p-2 text-right">Q4 Budget (₹)</th>
+                                        {/* --- ADDED HEADER --- */}
+                                        <th className="p-2 text-right">Contingency (₹)</th>
                                         <th className="p-2 text-right font-bold">Total Budget (₹)</th>
                                     </tr>
                                 </thead>
@@ -125,21 +172,24 @@ const ClientBudget = () => {
                                         return (
                                             <tr key={project.id} className="border-b">
                                                 <td className="p-2 font-medium">{project.title}</td>
-                                                {['q1_budget', 'q2_budget', 'q3_budget', 'q4_budget'].map(field => (
+                                                {/* --- ADDED contingency_budget TO THE ARRAY --- */}
+                                                {['q1_budget', 'q2_budget', 'q3_budget', 'q4_budget', 'contingency_budget'].map(field => (
                                                     <td key={field} className="p-2 text-right">
-                                                        <input 
+                                                        <input
                                                             type="text"
                                                             value={budget[field] || ''}
-                                                            onChange={e => handleBudgetChange(project.id, field, e.target.value)}
+                                                            onChange={e =>
+                                                                handleBudgetChange(project.id, field, e.target.value)
+                                                            }
                                                             className="w-24 text-right p-1 border rounded"
                                                         />
                                                     </td>
                                                 ))}
-                                                 <td className="p-2 text-right font-bold">
+                                                <td className="p-2 text-right font-bold">
                                                     ₹{budget.total_budget?.toLocaleString() || 0}
-                                                 </td>
+                                                </td>
                                             </tr>
-                                        )
+                                        );
                                     })}
                                 </tbody>
                             </table>
@@ -152,4 +202,3 @@ const ClientBudget = () => {
 };
 
 export default ClientBudget;
-
